@@ -20,8 +20,8 @@ contract Token {
 }
 
 contract CSAMM is Token {
-    IERC20 public immutable TOKEN0;
-    IERC20 public immutable TOKEN1;
+    IERC20 public immutable token0;
+    IERC20 public immutable token1;
     // Multipliers to normalize token decimals to 18
     uint256 public immutable NORM0;
     uint256 public immutable NORM1;
@@ -38,8 +38,8 @@ contract CSAMM is Token {
         NORM0 = 10 ** (18 - dec0);
         NORM1 = 10 ** (18 - dec1);
 
-        TOKEN0 = IERC20(_token0);
-        TOKEN1 = IERC20(_token1);
+        token0 = IERC20(_token0);
+        token1 = IERC20(_token1);
 
         require(_fee <= MAX_FEE, "fee > max");
         FEE = _fee;
@@ -50,14 +50,14 @@ contract CSAMM is Token {
         returns (uint256 shares)
     {
         // Calculate actual amount transferred
-        uint256 bal0Before = TOKEN0.balanceOf(address(this));
-        uint256 bal1Before = TOKEN1.balanceOf(address(this));
+        uint256 bal0Before = token0.balanceOf(address(this));
+        uint256 bal1Before = token1.balanceOf(address(this));
 
-        TOKEN0.transferFrom(msg.sender, address(this), amt0);
-        TOKEN1.transferFrom(msg.sender, address(this), amt1);
+        token0.transferFrom(msg.sender, address(this), amt0);
+        token1.transferFrom(msg.sender, address(this), amt1);
 
-        uint256 bal0After = TOKEN0.balanceOf(address(this));
-        uint256 bal1After = TOKEN1.balanceOf(address(this));
+        uint256 bal0After = token0.balanceOf(address(this));
+        uint256 bal1After = token1.balanceOf(address(this));
 
         uint256 delta0 = (bal0After - bal0Before) * NORM0;
         uint256 delta1 = (bal1After - bal1Before) * NORM1;
@@ -100,8 +100,8 @@ contract CSAMM is Token {
         a = L * s / T
         */
 
-        uint256 bal0 = TOKEN0.balanceOf(address(this));
-        uint256 bal1 = TOKEN1.balanceOf(address(this));
+        uint256 bal0 = token0.balanceOf(address(this));
+        uint256 bal1 = token1.balanceOf(address(this));
 
         delta0 = (bal0 * shares) / totalSupply;
         delta1 = (bal1 * shares) / totalSupply;
@@ -112,10 +112,10 @@ contract CSAMM is Token {
         _burn(msg.sender, shares);
 
         if (delta0 > 0) {
-            TOKEN0.transfer(msg.sender, delta0);
+            token0.transfer(msg.sender, delta0);
         }
         if (delta1 > 0) {
-            TOKEN1.transfer(msg.sender, delta1);
+            token1.transfer(msg.sender, delta1);
         }
     }
 
@@ -123,8 +123,8 @@ contract CSAMM is Token {
         external
         returns (uint256 amtOut)
     {
-        uint256 bal0 = TOKEN0.balanceOf(address(this));
-        uint256 bal1 = TOKEN1.balanceOf(address(this));
+        uint256 bal0 = token0.balanceOf(address(this));
+        uint256 bal1 = token1.balanceOf(address(this));
 
         (
             IERC20 tokenIn,
@@ -133,8 +133,8 @@ contract CSAMM is Token {
             uint256 normIn,
             uint256 normOut
         ) = zeroToOne
-            ? (TOKEN0, TOKEN1, bal0, NORM0, NORM1)
-            : (TOKEN1, TOKEN0, bal1, NORM1, NORM0);
+            ? (token0, token1, bal0, NORM0, NORM1)
+            : (token1, token0, bal1, NORM1, NORM0);
 
         tokenIn.transferFrom(msg.sender, address(this), amtIn);
         uint256 deltaIn = tokenIn.balanceOf(address(this)) - balIn;
