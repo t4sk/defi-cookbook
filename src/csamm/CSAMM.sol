@@ -140,7 +140,7 @@ contract CSAMM is Token {
         uint256 deltaIn = tokenIn.balanceOf(address(this)) - balIn;
 
         // 18 - (18 - decimals out) = decimals out
-        amtOut = deltaIn * normIn / normOut;
+        amtOut = (deltaIn * normIn) / normOut;
         amtOut = (amtOut * (MAX_FEE - FEE)) / MAX_FEE;
 
         require(amtOut >= minOut, "out < min");
