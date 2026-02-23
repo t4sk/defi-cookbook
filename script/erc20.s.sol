@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0
-pragma solidity 0.8.30;
+pragma solidity 0.8.32;
 
 import {Script} from "forge-std/Script.sol";
 import {ERC20} from "../src/lib/ERC20.sol";
