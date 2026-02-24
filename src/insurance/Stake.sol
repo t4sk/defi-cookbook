@@ -72,22 +72,26 @@ contract Stake {
         token.safeTransferFrom(msg.sender, address(this), amt);
 
         // TODO: restake
-        updateRewards(usr);
+        sync(usr);
         total += amt;
         shares[usr] += amt;
     }
 
-    function withdraw(address usr, uint256 amt) external auth live {
+    function withdraw(address usr, address dst, uint256 amt)
+        external
+        auth
+        live
+    {
         // TODO: delay -> withdraw
         // TODO: immediate withdraw after expiry
-        updateRewards(usr);
+        sync(usr);
         total -= amt;
         shares[usr] -= amt;
 
-        token.safeTransfer(usr, amt);
+        token.safeTransfer(dst, amt);
     }
 
-    function calcRewards(address usr) public view returns (uint256) {
+    function calc(address usr) public view returns (uint256) {
         uint256 t = Math.min(block.timestamp, exp);
         uint256 a = acc;
         if (total > 0) {
@@ -96,7 +100,7 @@ contract Stake {
         return rewards[usr] + shares[usr] * (a - accs[usr]) / R;
     }
 
-    function updateRewards(address usr) public returns (uint256 amt) {
+    function sync(address usr) public returns (uint256 amt) {
         uint256 t = Math.min(block.timestamp, exp);
         // TODO: if total = 0?
         if (total > 0) {
@@ -112,7 +116,7 @@ contract Stake {
     }
 
     function getRewards(address usr) public returns (uint256 amt) {
-        // TODO: updateRewards(usr);?
+        // TODO: sync(usr);?
         amt = rewards[usr];
         if (amt > 0) {
             rewards[usr] = 0;
@@ -121,7 +125,7 @@ contract Stake {
     }
 
     function pay(uint256 amt) external {
-        updateRewards(address(0));
+        sync(address(0));
 
         token.safeTransferFrom(msg.sender, address(this), amt);
         if (block.timestamp < exp) {
@@ -133,11 +137,11 @@ contract Stake {
     }
 
     // TODO: schedule new rates
-    function ext() external {
+    function roll() external {
         require(block.timestamp < exp, "expired");
         require(rate > 0, "rate = 0");
 
-        updateRewards(address(0));
+        sync(address(0));
         token.safeTransferFrom(msg.sender, address(this), rate * dur);
         exp += dur;
     }
