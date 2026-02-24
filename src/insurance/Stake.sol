@@ -10,6 +10,8 @@ contract Stake {
 
     // TODO: events
     // TODO: gas golf
+    // TODO: overflow dos?
+    // TODO: handle rebase token (inf deposit + checking bal diff)?
 
     // Rate scale
     uint256 private constant R = 1e18;
@@ -23,6 +25,8 @@ contract Stake {
     // user => staked amount
     mapping(address usr => uint256 amt) public shares;
 
+    // Reward duration
+    uint256 public immutable dur;
     // Last updated time
     uint256 public last;
     // Expiration time
@@ -44,12 +48,13 @@ contract Stake {
         _;
     }
 
-    constructor(address _token) {
+    constructor(address _token, uint256 _dur) {
         token = IERC20(_token);
         // TODO:emit
         auths[msg.sender] = true;
         last = block.timestamp;
-        exp = block.timestamp;
+        exp = block.timestamp + _dur;
+        dur = _dur;
     }
 
     function allow(address usr) external auth {
@@ -63,7 +68,7 @@ contract Stake {
     function deposit(address usr, uint256 amt) external auth live {
         // TODO: delay -> deposit
         require(block.timestamp < exp, "expired");
-        // TODO: handle rebase token (inf deposit + checking bal diff)?
+
         token.safeTransferFrom(msg.sender, address(this), amt);
 
         // TODO: restake
@@ -74,11 +79,11 @@ contract Stake {
 
     function withdraw(address usr, uint256 amt) external auth live {
         // TODO: delay -> withdraw
+        // TODO: immediate withdraw after expiry
         updateRewards(usr);
         total -= amt;
         shares[usr] -= amt;
 
-        // TODO: handle rebase token (inf deposit + checking bal diff)?
         token.safeTransfer(usr, amt);
     }
 
@@ -99,9 +104,11 @@ contract Stake {
         }
         last = t;
 
-        amt = shares[usr] * (acc - accs[usr]) / R;
-        accs[usr] = acc;
-        rewards[usr] += amt;
+        if (usr != address(0)) {
+            amt = shares[usr] * (acc - accs[usr]) / R;
+            accs[usr] = acc;
+            rewards[usr] += amt;
+        }
     }
 
     function getRewards(address usr) public returns (uint256 amt) {
@@ -113,24 +120,43 @@ contract Stake {
         }
     }
 
-    function pay() external {}
+    function pay(uint256 amt) external {
+        updateRewards(address(0));
 
-    // TODO
-    // function extend() external {}
+        token.safeTransferFrom(msg.sender, address(this), amt);
+        if (block.timestamp < exp) {
+            amt += rate * (exp - block.timestamp);
+        }
+        rate = amt / dur;
 
-    function cut() external auth {
-        require(stopped, "not stopped");
-        // TODO: stopped?
-        // delete withdrawal queue + pull funds from withdrawal queue
+        // TODO: update time stamps?
     }
 
-    // Insurer - stakers
-    // get rewards
+    // TODO: schedule new rates
+    function ext() external {
+        require(block.timestamp < exp, "expired");
+        require(rate > 0, "rate = 0");
 
-    // restake (get rewards + deposit (skip withdrawal queue))
+        updateRewards(address(0));
+        token.safeTransferFrom(msg.sender, address(this), rate * dur);
+        exp += dur;
+    }
 
+    function cut(address dst) external auth {
+        // TODO: stopped?
+        // require(stopped, "not stopped");
+        stopped = true;
+
+        uint256 bal = token.balanceOf(address(this));
+        token.safeTransfer(dst, bal);
+    }
+
+    // TODO: restake (get rewards + deposit (skip withdrawal queue))
+
+    // TODO: token recover
     // TODO: emergency clean up
     function stop() external auth live {
+        // TODO: stop rewards?
         stopped = true;
     }
 }
