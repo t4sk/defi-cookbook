@@ -16,6 +16,7 @@ contract DepositDelay {
         uint256 exp;
     }
 
+    // TODO: immutable
     uint256 public constant DELAY = 3 days;
 
     mapping(address usr => uint256) public counts;
@@ -27,14 +28,16 @@ contract DepositDelay {
         token.approve(address(stake), type(uint256).max);
     }
 
-    function queue(uint256 amt) external {
+    function queue(uint256 amt) external returns (uint256) {
         // TODO: require stake.exp > block.timestamp + DELAY?
         require(!stake.stopped(), "stopped");
 
         token.safeTransferFrom(msg.sender, address(this), amt);
-        locks[msg.sender][counts[msg.sender]] =
-            Lock({amt: amt, exp: block.timestamp + DELAY});
-        counts[msg.sender] += 1;
+
+        uint256 i = counts[msg.sender];
+        locks[msg.sender][i] = Lock({amt: amt, exp: block.timestamp + DELAY});
+        counts[msg.sender] = i + 1;
+        return i;
     }
 
     function deposit(uint256 i) external {

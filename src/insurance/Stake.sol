@@ -113,6 +113,19 @@ contract Stake is Auth {
         }
     }
 
+    function restake(address usr) external live {
+        require(block.timestamp < exp, "expired");
+
+        sync(usr);
+        uint256 amt = rewards[usr];
+        if (amt > 0) {
+            total += amt;
+            shares[usr] += amt;
+            keep -= amt;
+            rewards[usr] = 0;
+        }
+    }
+
     // TODO: live?
     function pay(uint256 amt) external live {
         sync(address(0));
@@ -144,19 +157,6 @@ contract Stake is Auth {
 
         uint256 bal = token.balanceOf(address(this));
         token.safeTransfer(dst, bal - keep);
-    }
-
-    function restake(address usr) external live {
-        require(block.timestamp < exp, "expired");
-
-        sync(usr);
-        uint256 amt = rewards[usr];
-        if (amt > 0) {
-            total += amt;
-            shares[usr] += amt;
-            keep -= amt;
-            rewards[usr] = 0;
-        }
     }
 
     // TODO: token recover

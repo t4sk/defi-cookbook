@@ -22,6 +22,7 @@ contract WithdrawDelay is Auth {
     mapping(address usr => uint256) public counts;
     mapping(address usr => mapping(uint256 count => Lock)) public locks;
 
+    // TODO: immutable
     uint256 public constant EPOCH = 3 days;
     // Last updated epoch
     uint256 public last;
@@ -35,7 +36,7 @@ contract WithdrawDelay is Auth {
         last = (block.timestamp / EPOCH) * EPOCH;
     }
 
-    function queue(uint256 amt) external {
+    function queue(uint256 amt) external returns (uint256) {
         stake.withdraw(msg.sender, address(this), amt);
 
         // Current epoch
@@ -54,8 +55,10 @@ contract WithdrawDelay is Auth {
         buckets[1] += amt;
         last = curr;
 
-        locks[msg.sender][counts[msg.sender]] = Lock({amt: amt, exp: exp});
-        counts[msg.sender] += 1;
+        uint256 i = counts[msg.sender];
+        locks[msg.sender][i] = Lock({amt: amt, exp: exp});
+        counts[msg.sender] = i + 1;
+        return i;
     }
 
     function unlock(uint256 i) external {
