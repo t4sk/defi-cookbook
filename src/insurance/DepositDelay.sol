@@ -21,7 +21,7 @@ contract DepositDelay {
     mapping(address usr => uint256) public counts;
     mapping(address usr => mapping(uint256 count => Lock)) public locks;
 
-    constructor(address _stake, address _withdrawDelay) {
+    constructor(address _stake) {
         stake = IStake(_stake);
         token = IERC20(stake.token());
         token.approve(address(stake), type(uint256).max);
