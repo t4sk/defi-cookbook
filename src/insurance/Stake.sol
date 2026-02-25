@@ -4,6 +4,7 @@ pragma solidity 0.8.32;
 import {IERC20} from "../lib/IERC20.sol";
 import {SafeTransfer} from "../lib/SafeTransfer.sol";
 import {Math} from "../lib/Math.sol";
+import {IWithdrawDelay} from "./IWithdrawDelay.sol";
 
 contract Stake {
     using SafeTransfer for IERC20;
@@ -36,6 +37,8 @@ contract Stake {
     // Rate accumulator
     uint256 public acc;
     mapping(address usr => uint256 acc) public accs;
+    // Total amount in rewards
+    uint256 public keep;
     mapping(address usr => uint256 amt) public rewards;
 
     modifier auth() {
@@ -66,7 +69,6 @@ contract Stake {
     }
 
     function deposit(address usr, uint256 amt) external auth live {
-        // TODO: delay -> deposit
         require(block.timestamp < exp, "expired");
 
         token.safeTransferFrom(msg.sender, address(this), amt);
@@ -77,20 +79,18 @@ contract Stake {
         shares[usr] += amt;
     }
 
-    function withdraw(address usr, address dst, uint256 amt)
-        external
-        auth
-        live
-    {
-        // TODO: delay -> withdraw
-        // TODO: immediate withdraw after expiry
+    function withdraw(address usr, address dst, uint256 amt) external live {
+        if (block.timestamp < exp) {
+            require(auths[msg.sender], "not auth");
+        }
+
         sync(usr);
         total -= amt;
         shares[usr] -= amt;
-
         token.safeTransfer(dst, amt);
     }
 
+    /*
     function calc(address usr) public view returns (uint256) {
         uint256 t = Math.min(block.timestamp, exp);
         uint256 a = acc;
@@ -99,6 +99,7 @@ contract Stake {
         }
         return rewards[usr] + shares[usr] * (a - accs[usr]) / R;
     }
+    */
 
     function sync(address usr) public returns (uint256 amt) {
         uint256 t = Math.min(block.timestamp, exp);
@@ -112,19 +113,24 @@ contract Stake {
             amt = shares[usr] * (acc - accs[usr]) / R;
             accs[usr] = acc;
             rewards[usr] += amt;
+            if (!stopped) {
+                keep += amt;
+            }
         }
     }
 
-    function getRewards(address usr) public returns (uint256 amt) {
-        // TODO: sync(usr);?
+    function take(address usr) public returns (uint256 amt) {
+        sync(usr);
         amt = rewards[usr];
         if (amt > 0) {
             rewards[usr] = 0;
+            keep -= amt;
             token.safeTransfer(usr, amt);
         }
     }
 
-    function pay(uint256 amt) external {
+    // TODO: live?
+    function pay(uint256 amt) external live {
         sync(address(0));
 
         token.safeTransferFrom(msg.sender, address(this), amt);
@@ -136,8 +142,9 @@ contract Stake {
         // TODO: update time stamps?
     }
 
+    // TODO: live?
     // TODO: schedule new rates
-    function roll() external {
+    function roll() external live {
         require(block.timestamp < exp, "expired");
         require(rate > 0, "rate = 0");
 
@@ -146,20 +153,41 @@ contract Stake {
         exp += dur;
     }
 
-    function cut(address dst) external auth {
-        // TODO: stopped?
-        // require(stopped, "not stopped");
-        stopped = true;
+    function cover(address src, address dst) external auth {
+        require(stopped, "not stopped");
+
+        token.safeTransferFrom(src, address(this), IWithdrawDelay(src).locked());
 
         uint256 bal = token.balanceOf(address(this));
-        token.safeTransfer(dst, bal);
+        token.safeTransfer(dst, bal - keep);
     }
 
-    // TODO: restake (get rewards + deposit (skip withdrawal queue))
+    function restake(address usr) external live {
+        require(block.timestamp < exp, "expired");
+
+        sync(usr);
+        uint256 amt = rewards[usr];
+        if (amt > 0) {
+            total += amt;
+            shares[usr] += amt;
+            keep -= amt;
+            rewards[usr] = 0;
+        }
+    }
 
     // TODO: token recover
     // TODO: emergency clean up
     function stop() external auth live {
+        require(block.timestamp < exp, "expired");
+
+        uint256 a0 = acc;
+        sync(address(0));
+        uint256 a1 = acc;
+
+        keep += (a1 - a0) * total / R;
+
+        last = block.timestamp;
+        exp = block.timestamp;
         // TODO: stop rewards?
         stopped = true;
     }

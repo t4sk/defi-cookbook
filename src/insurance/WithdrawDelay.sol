@@ -3,23 +3,15 @@ pragma solidity 0.8.32;
 
 import {IERC20} from "../lib/IERC20.sol";
 import {SafeTransfer} from "../lib/SafeTransfer.sol";
-import {Math} from "../lib/Math.sol";
-
-interface IStake {
-    function token() external view returns (address);
-    function stopped() external view returns (bool);
-    function deposit(address usr, uint256 amt) external;
-    function withdraw(address usr, address dst, uint256 amt) external;
-    function getRewards(address usr) external returns (uint256 amt);
-}
+import {IStake} from "./IStake.sol";
 
 contract WithdrawQueue {
     // TODO: events
+    // TODO: gas golf
     using SafeTransfer for IERC20;
 
     IERC20 public immutable token;
     IStake public immutable stake;
-    uint256 public immutable delay;
 
     struct Lock {
         uint256 amt;
@@ -29,16 +21,39 @@ contract WithdrawQueue {
     mapping(address usr => uint256) public counts;
     mapping(address usr => mapping(uint256 count => Lock)) public locks;
 
-    constructor(address _stake, uint256 _delay) {
+    uint256 public constant EPOCH = 3 days;
+    // Last updated epoch
+    uint256 public last;
+    // Last 2 epoch to total amount locked
+    uint256[2] public buckets;
+
+    constructor(address _stake) {
         stake = IStake(_stake);
         token = IERC20(stake.token());
-        delay = _delay;
+        token.approve(_stake, type(uint256).max);
+        last = (block.timestamp / EPOCH) * EPOCH;
     }
 
     function queue(uint256 amt) external {
         stake.withdraw(msg.sender, address(this), amt);
-        locks[msg.sender][counts[msg.sender]] =
-            Lock({amt: amt, exp: block.timestamp + delay});
+
+        // Current epoch
+        uint256 curr = (block.timestamp / EPOCH) * EPOCH;
+        // End of next epoch
+        uint256 exp = curr + 2 * EPOCH;
+
+        if (last + 2 * EPOCH <= curr) {
+            buckets[0] = 0;
+            buckets[1] = 0;
+        } else if (last + EPOCH == curr) {
+            buckets[0] = buckets[1];
+            buckets[1] = 0;
+        }
+
+        buckets[1] += amt;
+        last = curr;
+
+        locks[msg.sender][counts[msg.sender]] = Lock({amt: amt, exp: exp});
         counts[msg.sender] += 1;
     }
 
@@ -50,8 +65,19 @@ contract WithdrawQueue {
         require(lock.exp <= block.timestamp, "lock not expired");
 
         uint256 amt = lock.amt;
-        lock.amt = 0;
+        delete locks[msg.sender][i];
 
         token.safeTransfer(msg.sender, amt);
+    }
+
+    function locked() public view returns (uint256) {
+        uint256 curr = (block.timestamp / EPOCH) * EPOCH;
+
+        if (last + 2 * EPOCH <= curr) {
+            return 0;
+        } else if (last + EPOCH == curr) {
+            return buckets[1];
+        }
+        return buckets[0] + buckets[1];
     }
 }
