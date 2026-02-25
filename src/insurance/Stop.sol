@@ -12,6 +12,7 @@ contract Stop is Auth {
     IStake public immutable stake;
     IWithdrawDelay public immutable withdrawDelay;
 
+    // TODO: use create2 + stop inside constructor?
     constructor(address _stake, address _withdrawDelay) {
         stake = IStake(_stake);
         token = IERC20(stake.token());
