@@ -5,4 +5,5 @@ interface IStake {
     function token() external view returns (address);
     function deposit(address usr, uint256 amt) external;
     function withdraw(address usr, address dst, uint256 amt) external;
+    function stop() external;
 }

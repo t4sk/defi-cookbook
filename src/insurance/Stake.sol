@@ -4,9 +4,9 @@ pragma solidity 0.8.32;
 import {IERC20} from "../lib/IERC20.sol";
 import {SafeTransfer} from "../lib/SafeTransfer.sol";
 import {Math} from "../lib/Math.sol";
-import {IWithdrawDelay} from "./IWithdrawDelay.sol";
+import {Auth} from "./lib/Auth.sol";
 
-contract Stake {
+contract Stake is Auth {
     using SafeTransfer for IERC20;
 
     // TODO: events
@@ -19,7 +19,6 @@ contract Stake {
     IERC20 public immutable token;
 
     bool public stopped;
-    mapping(address => bool) public auths;
 
     // Total staked
     uint256 public total;
@@ -41,11 +40,6 @@ contract Stake {
     uint256 public keep;
     mapping(address usr => uint256 amt) public rewards;
 
-    modifier auth() {
-        require(auths[msg.sender], "not auth");
-        _;
-    }
-
     modifier live() {
         require(!stopped, "stopped");
         _;
@@ -53,19 +47,9 @@ contract Stake {
 
     constructor(address _token, uint256 _dur) {
         token = IERC20(_token);
-        // TODO:emit
-        auths[msg.sender] = true;
         last = block.timestamp;
         exp = block.timestamp + _dur;
         dur = _dur;
-    }
-
-    function allow(address usr) external auth {
-        auths[usr] = true;
-    }
-
-    function deny(address usr) external auth {
-        auths[usr] = false;
     }
 
     function deposit(address usr, uint256 amt) external auth live {
@@ -153,10 +137,10 @@ contract Stake {
         exp += dur;
     }
 
-    function cover(address src, address dst) external auth {
+    function cover(address src, uint256 amt, address dst) external auth {
         require(stopped, "not stopped");
 
-        token.safeTransferFrom(src, address(this), IWithdrawDelay(src).locked());
+        token.safeTransferFrom(src, address(this), amt);
 
         uint256 bal = token.balanceOf(address(this));
         token.safeTransfer(dst, bal - keep);

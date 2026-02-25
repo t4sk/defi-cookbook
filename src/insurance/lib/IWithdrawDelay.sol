@@ -2,6 +2,6 @@
 pragma solidity 0.8.32;
 
 interface IWithdrawDelay {
-    function locked() external view returns (uint256);
+    function lock() external returns (uint256);
 }
 
