@@ -113,11 +113,11 @@ contract Stake is Auth {
         }
     }
 
-    function restake(address usr) external live {
+    function restake(address usr) external live returns (uint256 amt) {
         require(block.timestamp < exp, "expired");
 
         sync(usr);
-        uint256 amt = rewards[usr];
+        amt = rewards[usr];
         if (amt > 0) {
             total += amt;
             shares[usr] += amt;
