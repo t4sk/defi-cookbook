@@ -20,7 +20,7 @@ contract WithdrawDelay is Auth {
     }
 
     mapping(address usr => uint256) public counts;
-    mapping(address usr => mapping(uint256 count => Lock)) public locks;
+    mapping(address usr => mapping(uint256 i => Lock)) public locks;
 
     // TODO: immutable
     uint256 public constant EPOCH = 3 days;

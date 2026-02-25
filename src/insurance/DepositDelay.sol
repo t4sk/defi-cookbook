@@ -20,7 +20,7 @@ contract DepositDelay {
     uint256 public constant DELAY = 3 days;
 
     mapping(address usr => uint256) public counts;
-    mapping(address usr => mapping(uint256 count => Lock)) public locks;
+    mapping(address usr => mapping(uint256 i => Lock)) public locks;
 
     constructor(address _stake) {
         stake = IStake(_stake);
@@ -52,6 +52,11 @@ contract DepositDelay {
     }
 
     function cancel(uint256 i) external {
+        Lock storage lock = locks[msg.sender][i];
+        uint256 amt = lock.amt;
+        require(amt > 0, "lock amt = 0");
+
         delete locks[msg.sender][i];
+        token.safeTransfer(msg.sender, amt);
     }
 }
