@@ -167,9 +167,12 @@ contract Stake is Auth {
         sync(address(0));
         token.safeTransferFrom(msg.sender, address(this), rate * dur);
 
+        // TODO: check
+        // Atleast half the duration has elapsed
+        uint256 dt = exp - block.timestamp;
+        require(dt > dur / 2, "too early");
         // Allow rolling once per duration
-        // TODO: atlease half the duration has elapsed
-        require(exp - block.timestamp < dur, "rolled");
+        require(dt < dur, "rolled");
         exp += dur;
     }
 
