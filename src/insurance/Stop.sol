@@ -2,7 +2,6 @@
 pragma solidity 0.8.32;
 
 import {IERC20} from "../lib/IERC20.sol";
-import {SafeTransfer} from "../lib/SafeTransfer.sol";
 import {IStake} from "./lib/IStake.sol";
 import {IWithdrawDelay} from "./lib/IWithdrawDelay.sol";
 import {Auth} from "./lib/Auth.sol";

@@ -20,7 +20,14 @@ contract Stake is Auth {
     // Reward duration
     uint256 public immutable dur;
 
-    bool public stopped;
+    enum State {
+        Live,
+        Stopped,
+        Covered,
+        NotCovered
+    }
+
+    State public state;
 
     // Total staked
     uint256 public total;
@@ -42,7 +49,7 @@ contract Stake is Auth {
     mapping(address usr => uint256 amt) public rewards;
 
     modifier live() {
-        require(!stopped, "stopped");
+        require(state == State.Live, "not live");
         _;
     }
 
@@ -56,32 +63,31 @@ contract Stake is Auth {
         last = block.timestamp;
         exp = block.timestamp + _dur;
         dur = _dur;
+        state = State.Live;
+    }
+
+    function stopped() public view returns (bool) {
+        return uint256(state) > uint256(State.Live);
     }
 
     function deposit(address usr, uint256 amt) external auth live time {
         token.safeTransferFrom(msg.sender, address(this), amt);
-
         sync(usr);
         total += amt;
         shares[usr] += amt;
     }
 
-    function withdraw(address usr, address dst, uint256 amt) external live {
-        // TODO: move logic to exit
-        // Stakers can withdraw without delay after expiry
-        if (block.timestamp < exp) {
-            require(auths[msg.sender], "not auth");
-        } else {
-            require(usr == msg.sender, "not msg.sender");
-        }
-
+    function withdraw(address usr, address dst, uint256 amt)
+        external
+        auth
+        live
+        time
+    {
         sync(usr);
         total -= amt;
         shares[usr] -= amt;
         token.safeTransfer(dst, amt);
     }
-
-    // TODO: exit after stop, if cover is invalid or expired
 
     function calc(address usr) public view returns (uint256) {
         uint256 t = Math.min(block.timestamp, exp);
@@ -104,7 +110,7 @@ contract Stake is Auth {
             amt = shares[usr] * (acc - accs[usr]) / R;
             accs[usr] = acc;
             rewards[usr] += amt;
-            if (!stopped) {
+            if (!stopped()) {
                 keep += amt;
             }
         }
@@ -176,18 +182,44 @@ contract Stake is Auth {
         // Stop rewards
         last = block.timestamp;
         exp = block.timestamp;
-        stopped = true;
+        state = State.Stopped;
     }
 
-    // TODO: can call more than once?
+    function settle(State s) external auth {
+        require(state == State.Stopped, "not stopped");
+        require(s == State.Covered || s == State.NotCovered, "invalid state");
+        state = s;
+    }
+
     function cover(address src, uint256 amt, address dst) external auth {
-        require(stopped, "not stopped");
+        require(state == State.Covered, "invalid state");
 
         token.safeTransferFrom(src, address(this), amt);
 
         // bal >= total + amount pulled from src + rewards
         uint256 bal = token.balanceOf(address(this));
         token.safeTransfer(dst, bal - keep);
+    }
+
+    // TODO: exit after stop, if cover is invalid or expired
+    function exit() external returns (uint256 amt) {
+        require(state == State.NotCovered, "invalid state");
+
+        sync(msg.sender);
+
+        // Rewards
+        uint256 r = rewards[msg.sender];
+        rewards[msg.sender] = 0;
+        keep -= r;
+
+        // Staked
+        uint256 s = shares[msg.sender];
+        total -= s;
+        shares[msg.sender] -= s;
+
+        amt = r + s;
+
+        token.safeTransfer(msg.sender, amt);
     }
 
     function recover(address _token) external auth {
