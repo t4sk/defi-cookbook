@@ -77,6 +77,8 @@ contract Stake is Auth {
         token.safeTransfer(dst, amt);
     }
 
+    // TODO: exit after stop, if cover is invalid
+
     function calc(address usr) public view returns (uint256) {
         uint256 t = Math.min(block.timestamp, exp);
         uint256 a = acc;
@@ -127,13 +129,30 @@ contract Stake is Auth {
         }
     }
 
-    function pay(uint256 amt) external live {
+    function inc(uint256 amt) external live {
         require(block.timestamp < exp, "expired");
-
         sync(address(0));
         token.safeTransferFrom(msg.sender, address(this), amt);
         rate += amt / (exp - block.timestamp);
     }
+
+    /*
+    function dec(uint256 amt) external live {
+        require(block.timestamp < exp, "expired");
+
+        sync(address(0));
+        uint256 dt = exp - block.timestamp;
+        uint256 rem = rate * dt;
+        amt = Math.min(rem, amt);
+
+        if (amt == rem) {
+            rate = 0;
+        } else {
+            rate -= amt / dt;
+        }
+
+    }
+    */
 
     // TODO: roll + schedule new rate
     function roll() external live {
@@ -142,17 +161,10 @@ contract Stake is Auth {
 
         sync(address(0));
         token.safeTransferFrom(msg.sender, address(this), rate * dur);
+
+        // Allow rolling once per duration
+        require(exp - block.timestamp < dur, "rolled");
         exp += dur;
-    }
-
-    function cover(address src, uint256 amt, address dst) external auth {
-        require(stopped, "not stopped");
-
-        token.safeTransferFrom(src, address(this), amt);
-
-        // bal >= total + amount pulled from src + rewards
-        uint256 bal = token.balanceOf(address(this));
-        token.safeTransfer(dst, bal - keep);
     }
 
     function stop() external auth live {
@@ -168,6 +180,17 @@ contract Stake is Auth {
         last = block.timestamp;
         exp = block.timestamp;
         stopped = true;
+    }
+
+    // TODO: can call more than once?
+    function cover(address src, uint256 amt, address dst) external auth {
+        require(stopped, "not stopped");
+
+        token.safeTransferFrom(src, address(this), amt);
+
+        // bal >= total + amount pulled from src + rewards
+        uint256 bal = token.balanceOf(address(this));
+        token.safeTransfer(dst, bal - keep);
     }
 
     function recover(address _token) external auth {
