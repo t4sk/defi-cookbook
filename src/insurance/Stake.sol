@@ -187,7 +187,9 @@ contract Stake is Auth {
 
     function settle(State s) external auth {
         require(state == State.Stopped, "not stopped");
-        require(s == State.Covered || s == State.NotCovered, "invalid state");
+        require(
+            s == State.Covered || s == State.NotCovered, "invalid next state"
+        );
         state = s;
     }
 
@@ -201,9 +203,13 @@ contract Stake is Auth {
         token.safeTransfer(dst, bal - keep);
     }
 
-    // TODO: exit after stop, if cover is invalid or expired
     function exit() external returns (uint256 amt) {
-        require(state == State.NotCovered, "invalid state");
+        // Expired without call to stop or settled
+        if (state == State.Live) {
+            require(exp < block.timestamp, "not expired");
+        } else {
+            require(state == State.NotCovered, "invalid state");
+        }
 
         sync(msg.sender);
 
