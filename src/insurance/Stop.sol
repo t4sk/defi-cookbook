@@ -22,7 +22,7 @@ contract Stop is Auth {
     }
 
     function stop() external auth {
-        stake.stop();
         withdrawDelay.lock();
+        stake.stop();
     }
 }

@@ -13,37 +13,46 @@ contract WithdrawDelay is Auth {
 
     IERC20 public immutable token;
     IStake public immutable stake;
+    // Duration of an epoch
+    uint256 public immutable EPOCH;
 
     struct Lock {
         uint256 amt;
         uint256 exp;
     }
 
-    mapping(address usr => uint256) public counts;
+    // User => lock count
+    mapping(address usr => uint256 count) public counts;
+    // User => lock index => Lock
     mapping(address usr => mapping(uint256 i => Lock)) public locks;
+    // Total amount locked
+    uint256 public keep;
 
-    // TODO: immutable
-    uint256 public constant EPOCH = 3 days;
     // Last updated epoch
     uint256 public last;
-    // Last 2 epoch to total amount locked
+    // Total locked amounts in the last 2 epoch
     uint256[2] public buckets;
     bool public locked;
 
-    constructor(address _stake) {
+    constructor(address _stake, uint256 _epoch) {
         stake = IStake(_stake);
         token = IERC20(stake.token());
+        EPOCH = _epoch;
         last = (block.timestamp / EPOCH) * EPOCH;
     }
 
     function queue(uint256 amt) external returns (uint256) {
+        require(!locked, "locked");
+
         stake.withdraw(msg.sender, address(this), amt);
+        keep += amt;
 
         // Current epoch
         uint256 curr = (block.timestamp / EPOCH) * EPOCH;
         // End of next epoch
         uint256 exp = curr + 2 * EPOCH;
 
+        // Update buckets
         if (last + 2 * EPOCH <= curr) {
             buckets[0] = 0;
             buckets[1] = 0;
@@ -58,6 +67,7 @@ contract WithdrawDelay is Auth {
         uint256 i = counts[msg.sender];
         locks[msg.sender][i] = Lock({amt: amt, exp: exp});
         counts[msg.sender] = i + 1;
+
         return i;
     }
 
@@ -67,16 +77,19 @@ contract WithdrawDelay is Auth {
         Lock storage lock = locks[msg.sender][i];
         require(lock.amt > 0, "lock amt = 0");
         require(lock.exp <= block.timestamp, "lock not expired");
-        require(!locked || lock.exp <= last, "locked");
+        if (locked) {
+            require(lock.exp <= last, "locked");
+        }
 
         uint256 amt = lock.amt;
+        keep -= amt;
         delete locks[msg.sender][i];
 
         token.safeTransfer(msg.sender, amt);
     }
 
     function lock() external auth returns (uint256) {
-        require(!locked, "already locked");
+        require(!locked, "locked");
 
         uint256 curr = (block.timestamp / EPOCH) * EPOCH;
 
@@ -92,9 +105,24 @@ contract WithdrawDelay is Auth {
         locked = true;
 
         uint256 amt = buckets[0] + buckets[1];
-
-        token.safeTransfer(msg.sender, amt);
+        if (amt > 0) {
+            keep -= amt;
+            token.safeTransfer(msg.sender, amt);
+        }
 
         return amt;
+    }
+
+    function recover(address _token) external auth {
+        if (_token == address(0)) {
+            (bool ok,) = msg.sender.call{value: address(this).balance}("");
+            require(ok, "send ETH failed");
+        } else if (_token == address(token)) {
+            uint256 bal = token.balanceOf(address(this));
+            token.safeTransfer(msg.sender, bal - keep);
+        } else {
+            uint256 bal = IERC20(_token).balanceOf(address(this));
+            IERC20(_token).safeTransfer(msg.sender, bal);
+        }
     }
 }

@@ -4,39 +4,47 @@ pragma solidity 0.8.32;
 import {IERC20} from "../lib/IERC20.sol";
 import {SafeTransfer} from "../lib/SafeTransfer.sol";
 import {IStake} from "./lib/IStake.sol";
+import {Auth} from "./lib/Auth.sol";
 
-contract DepositDelay {
+// TODO: events
+// TODO: gas golf
+contract DepositDelay is Auth {
     using SafeTransfer for IERC20;
 
     IERC20 public immutable token;
     IStake public immutable stake;
+    uint256 public immutable DELAY;
 
     struct Lock {
         uint256 amt;
         uint256 exp;
     }
 
-    // TODO: immutable
-    uint256 public constant DELAY = 3 days;
-
-    mapping(address usr => uint256) public counts;
+    // user => number of locks
+    mapping(address usr => uint256 count) public counts;
+    // user => lock index => lock
     mapping(address usr => mapping(uint256 i => Lock)) public locks;
+    // Total amount locked
+    uint256 public keep;
 
-    constructor(address _stake) {
+    constructor(address _stake, uint256 _delay) {
         stake = IStake(_stake);
         token = IERC20(stake.token());
         token.approve(address(stake), type(uint256).max);
+        DELAY = _delay;
     }
 
     function queue(uint256 amt) external returns (uint256) {
-        // TODO: require stake.exp > block.timestamp + DELAY?
+        // If stake.exp < lock.exp, then call cancel
         require(!stake.stopped(), "stopped");
 
         token.safeTransferFrom(msg.sender, address(this), amt);
+        keep += amt;
 
         uint256 i = counts[msg.sender];
         locks[msg.sender][i] = Lock({amt: amt, exp: block.timestamp + DELAY});
         counts[msg.sender] = i + 1;
+
         return i;
     }
 
@@ -46,6 +54,7 @@ contract DepositDelay {
         require(lock.exp <= block.timestamp, "lock not expired");
 
         uint256 amt = lock.amt;
+        keep -= amt;
         delete locks[msg.sender][i];
 
         stake.deposit(msg.sender, amt);
@@ -58,5 +67,18 @@ contract DepositDelay {
 
         delete locks[msg.sender][i];
         token.safeTransfer(msg.sender, amt);
+    }
+
+    function recover(address _token) external auth {
+        if (_token == address(0)) {
+            (bool ok,) = msg.sender.call{value: address(this).balance}("");
+            require(ok, "send ETH failed");
+        } else if (_token == address(token)) {
+            uint256 bal = token.balanceOf(address(this));
+            token.safeTransfer(msg.sender, bal - keep);
+        } else {
+            uint256 bal = IERC20(_token).balanceOf(address(this));
+            IERC20(_token).safeTransfer(msg.sender, bal);
+        }
     }
 }

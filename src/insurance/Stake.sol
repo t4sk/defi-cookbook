@@ -17,6 +17,8 @@ contract Stake is Auth {
     // Rate scale
     uint256 private constant R = 1e18;
     IERC20 public immutable token;
+    // Reward duration
+    uint256 public immutable dur;
 
     bool public stopped;
 
@@ -25,8 +27,6 @@ contract Stake is Auth {
     // user => staked amount
     mapping(address usr => uint256 amt) public shares;
 
-    // Reward duration
-    uint256 public immutable dur;
     // Last updated time
     uint256 public last;
     // Expiration time
@@ -35,6 +35,7 @@ contract Stake is Auth {
     uint256 public rate;
     // Rate accumulator
     uint256 public acc;
+    // User => last rate accumulator
     mapping(address usr => uint256 acc) public accs;
     // Total amount in rewards
     uint256 public keep;
@@ -57,15 +58,17 @@ contract Stake is Auth {
 
         token.safeTransferFrom(msg.sender, address(this), amt);
 
-        // TODO: restake
         sync(usr);
         total += amt;
         shares[usr] += amt;
     }
 
     function withdraw(address usr, address dst, uint256 amt) external live {
+        // Stakers can withdraw without delay after expiry
         if (block.timestamp < exp) {
             require(auths[msg.sender], "not auth");
+        } else {
+            require(usr == msg.sender, "not msg.sender");
         }
 
         sync(usr);
@@ -74,7 +77,6 @@ contract Stake is Auth {
         token.safeTransfer(dst, amt);
     }
 
-    /*
     function calc(address usr) public view returns (uint256) {
         uint256 t = Math.min(block.timestamp, exp);
         uint256 a = acc;
@@ -83,7 +85,6 @@ contract Stake is Auth {
         }
         return rewards[usr] + shares[usr] * (a - accs[usr]) / R;
     }
-    */
 
     function sync(address usr) public returns (uint256 amt) {
         uint256 t = Math.min(block.timestamp, exp);
@@ -103,31 +104,32 @@ contract Stake is Auth {
         }
     }
 
-    function take(address usr) public returns (uint256 amt) {
-        sync(usr);
-        amt = rewards[usr];
+    function take() public returns (uint256 amt) {
+        sync(msg.sender);
+        amt = rewards[msg.sender];
         if (amt > 0) {
-            rewards[usr] = 0;
+            rewards[msg.sender] = 0;
             keep -= amt;
-            token.safeTransfer(usr, amt);
+            token.safeTransfer(msg.sender, amt);
         }
     }
 
-    function restake(address usr) external live returns (uint256 amt) {
+    function restake() external live returns (uint256 amt) {
         require(block.timestamp < exp, "expired");
 
-        sync(usr);
-        amt = rewards[usr];
+        sync(msg.sender);
+        amt = rewards[msg.sender];
         if (amt > 0) {
             total += amt;
-            shares[usr] += amt;
+            shares[msg.sender] += amt;
             keep -= amt;
-            rewards[usr] = 0;
+            rewards[msg.sender] = 0;
         }
     }
 
-    // TODO: live?
     function pay(uint256 amt) external live {
+        require(block.timestamp < exp, "expired");
+
         sync(address(0));
 
         token.safeTransferFrom(msg.sender, address(this), amt);
@@ -135,11 +137,8 @@ contract Stake is Auth {
             amt += rate * (exp - block.timestamp);
         }
         rate = amt / dur;
-
-        // TODO: update time stamps?
     }
 
-    // TODO: live?
     // TODO: schedule new rates
     function roll() external live {
         require(block.timestamp < exp, "expired");
@@ -155,12 +154,11 @@ contract Stake is Auth {
 
         token.safeTransferFrom(src, address(this), amt);
 
+        // bal >= total + amount pulled from src + rewards
         uint256 bal = token.balanceOf(address(this));
         token.safeTransfer(dst, bal - keep);
     }
 
-    // TODO: token recover
-    // TODO: emergency clean up
     function stop() external auth live {
         require(block.timestamp < exp, "expired");
 
@@ -170,9 +168,23 @@ contract Stake is Auth {
 
         keep += (a1 - a0) * total / R;
 
+        // Stop rewards
         last = block.timestamp;
         exp = block.timestamp;
-        // TODO: stop rewards?
         stopped = true;
+    }
+
+    function recover(address _token) external auth {
+        if (_token == address(0)) {
+            (bool ok,) = msg.sender.call{value: address(this).balance}("");
+            require(ok, "send ETH failed");
+        } else if (_token == address(token)) {
+            // TODO: fix
+            uint256 bal = token.balanceOf(address(this));
+            token.safeTransfer(msg.sender, bal - keep);
+        } else {
+            uint256 bal = IERC20(_token).balanceOf(address(this));
+            IERC20(_token).safeTransfer(msg.sender, bal);
+        }
     }
 }
