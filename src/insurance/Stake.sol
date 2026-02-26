@@ -46,6 +46,11 @@ contract Stake is Auth {
         _;
     }
 
+    modifier time() {
+        require(block.timestamp < exp, "expired");
+        _;
+    }
+
     constructor(address _token, uint256 _dur) {
         token = IERC20(_token);
         last = block.timestamp;
@@ -53,9 +58,7 @@ contract Stake is Auth {
         dur = _dur;
     }
 
-    function deposit(address usr, uint256 amt) external auth live {
-        require(block.timestamp < exp, "expired");
-
+    function deposit(address usr, uint256 amt) external auth live time {
         token.safeTransferFrom(msg.sender, address(this), amt);
 
         sync(usr);
@@ -64,6 +67,7 @@ contract Stake is Auth {
     }
 
     function withdraw(address usr, address dst, uint256 amt) external live {
+        // TODO: move logic to exit
         // Stakers can withdraw without delay after expiry
         if (block.timestamp < exp) {
             require(auths[msg.sender], "not auth");
@@ -77,7 +81,7 @@ contract Stake is Auth {
         token.safeTransfer(dst, amt);
     }
 
-    // TODO: exit after stop, if cover is invalid
+    // TODO: exit after stop, if cover is invalid or expired
 
     function calc(address usr) public view returns (uint256) {
         uint256 t = Math.min(block.timestamp, exp);
@@ -116,9 +120,7 @@ contract Stake is Auth {
         }
     }
 
-    function restake() external live returns (uint256 amt) {
-        require(block.timestamp < exp, "expired");
-
+    function restake() external live time returns (uint256 amt) {
         sync(msg.sender);
         amt = rewards[msg.sender];
         if (amt > 0) {
@@ -129,8 +131,7 @@ contract Stake is Auth {
         }
     }
 
-    function inc(uint256 amt) external live {
-        require(block.timestamp < exp, "expired");
+    function inc(uint256 amt) external live time {
         sync(address(0));
         token.safeTransferFrom(msg.sender, address(this), amt);
         rate += amt / (exp - block.timestamp);
@@ -150,13 +151,11 @@ contract Stake is Auth {
         } else {
             rate -= amt / dt;
         }
-
     }
     */
 
     // TODO: roll + schedule new rate
-    function roll() external live {
-        require(block.timestamp < exp, "expired");
+    function roll() external live time {
         require(rate > 0, "rate = 0");
 
         sync(address(0));
@@ -167,9 +166,7 @@ contract Stake is Auth {
         exp += dur;
     }
 
-    function stop() external auth live {
-        require(block.timestamp < exp, "expired");
-
+    function stop() external auth live time {
         uint256 a0 = acc;
         sync(address(0));
         uint256 a1 = acc;
