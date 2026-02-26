@@ -135,9 +135,11 @@ contract Stake is Auth {
         token.safeTransferFrom(msg.sender, address(this), amt);
         amt += rate * (exp - block.timestamp);
 
+        // TODO: fix
         rate = amt / dur;
     }
 
+    // TODO: roll + schedule new rate
     function roll() external live {
         require(block.timestamp < exp, "expired");
         require(rate > 0, "rate = 0");
