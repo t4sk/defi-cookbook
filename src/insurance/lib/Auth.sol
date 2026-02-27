@@ -2,6 +2,9 @@
 pragma solidity 0.8.32;
 
 contract Auth {
+    event Allow(address indexed usr);
+    event Deny(address indexed usr);
+
     mapping(address => bool) public auths;
 
     modifier auth() {
@@ -11,13 +14,16 @@ contract Auth {
 
     constructor() {
         auths[msg.sender] = true;
+        emit Allow(msg.sender);
     }
 
     function allow(address usr) external auth {
         auths[usr] = true;
+        emit Allow(usr);
     }
 
     function deny(address usr) external auth {
         auths[usr] = false;
+        emit Deny(usr);
     }
 }
