@@ -12,7 +12,6 @@ contract Stake is Auth {
     // TODO: events
     // TODO: gas golf
     // TODO: overflow dos?
-    // TODO: handle rebase token (inf deposit + checking bal diff)?
 
     // Rate scale
     uint256 private constant R = 1e18;
@@ -75,26 +74,7 @@ contract Stake is Auth {
         return uint256(state) > uint256(State.Live);
     }
 
-    function deposit(address usr, uint256 amt) external auth live time {
-        token.safeTransferFrom(msg.sender, address(this), amt);
-        sync(usr);
-        total += amt;
-        shares[usr] += amt;
-    }
-
-    function withdraw(address usr, address dst, uint256 amt)
-        external
-        auth
-        live
-        time
-    {
-        sync(usr);
-        total -= amt;
-        shares[usr] -= amt;
-        token.safeTransfer(dst, amt);
-    }
-
-    function calc(address usr) public view returns (uint256) {
+    function calc(address usr) external view returns (uint256) {
         uint256 t = Math.min(block.timestamp, exp);
         uint256 a = acc;
         if (total > 0) {
@@ -111,7 +91,7 @@ contract Stake is Auth {
     function sync(address usr) public returns (uint256 amt) {
         uint256 t = Math.min(block.timestamp, exp);
 
-        // TODO: total = 0 causes reward leakage?
+        // TODO: fix total = 0 causes reward leakage?
         // TODO: check code
         if (total > 0) {
             if (fut != 0 && fut <= t) {
@@ -135,6 +115,25 @@ contract Stake is Auth {
                 keep += amt;
             }
         }
+    }
+
+    function deposit(address usr, uint256 amt) external auth live time {
+        token.safeTransferFrom(msg.sender, address(this), amt);
+        sync(usr);
+        total += amt;
+        shares[usr] += amt;
+    }
+
+    function withdraw(address usr, address dst, uint256 amt)
+        external
+        auth
+        live
+        time
+    {
+        sync(usr);
+        total -= amt;
+        shares[usr] -= amt;
+        token.safeTransfer(dst, amt);
     }
 
     function take() public returns (uint256 amt) {
