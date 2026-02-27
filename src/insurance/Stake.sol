@@ -51,6 +51,8 @@ contract Stake is Auth {
     uint256 public futRate;
     // Timestamp to apply future rate
     uint256 public fut;
+    // Authorized account to call roll
+    address public roller;
 
     modifier live() {
         require(state == State.Live, "not live");
@@ -62,12 +64,13 @@ contract Stake is Auth {
         _;
     }
 
-    constructor(address _token, uint256 _dur) {
+    constructor(address _token, uint256 _dur, address _roller) {
         token = IERC20(_token);
         last = block.timestamp;
         exp = block.timestamp + _dur;
         dur = _dur;
         state = State.Live;
+        roller = _roller;
     }
 
     function stopped() public view returns (bool) {
@@ -165,6 +168,7 @@ contract Stake is Auth {
     }
 
     function roll(uint256 f) external live time {
+        require(msg.sender == roller, "not roller");
         require(rate > 0, "rate = 0");
 
         sync(address(0));

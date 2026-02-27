@@ -6,10 +6,13 @@ import {SafeTransfer} from "../lib/SafeTransfer.sol";
 import {IStake} from "./lib/IStake.sol";
 import {Auth} from "./lib/Auth.sol";
 
-// TODO: events
 // TODO: gas golf
 contract DepositDelay is Auth {
     using SafeTransfer for IERC20;
+
+    event Queue(address indexed usr, uint256 i, uint256 amt);
+    event Deposit(address indexed usr, uint256 i, uint256 amt);
+    event Cancel(address indexed usr, uint256 i, uint256 amt);
 
     IERC20 public immutable token;
     IStake public immutable stake;
@@ -24,7 +27,7 @@ contract DepositDelay is Auth {
     mapping(address usr => uint256 count) public counts;
     // user => lock index => lock
     mapping(address usr => mapping(uint256 i => Lock)) public locks;
-    // Total amount locked
+    // Total amount queued
     uint256 public keep;
 
     constructor(address _stake, uint256 _delay) {
@@ -45,6 +48,8 @@ contract DepositDelay is Auth {
         locks[msg.sender][i] = Lock({amt: amt, exp: block.timestamp + DELAY});
         counts[msg.sender] = i + 1;
 
+        emit Queue(msg.sender, i, amt);
+
         return i;
     }
 
@@ -58,6 +63,8 @@ contract DepositDelay is Auth {
         delete locks[msg.sender][i];
 
         stake.deposit(msg.sender, amt);
+
+        emit Deposit(msg.sender, i, amt);
     }
 
     function cancel(uint256 i) external {
@@ -65,8 +72,12 @@ contract DepositDelay is Auth {
         uint256 amt = lock.amt;
         require(amt > 0, "lock amt = 0");
 
+        keep -= amt;
         delete locks[msg.sender][i];
+
         token.safeTransfer(msg.sender, amt);
+
+        emit Cancel(msg.sender, i, amt);
     }
 
     function recover(address _token) external auth {

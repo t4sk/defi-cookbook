@@ -9,11 +9,15 @@ import {Stop} from "./Stop.sol";
 // TODO: events
 // TODO: minimal proxy?
 contract Factory {
-    function create(address token, uint256 dur, uint256 delay, uint256 epoch)
-        external
-    {
+    function create(
+        address token,
+        uint256 dur,
+        address roller,
+        uint256 delay,
+        uint256 epoch
+    ) external {
         // TODO: input validations
-        Stake stake = new Stake(token, dur);
+        Stake stake = new Stake(token, dur, roller);
         DepositDelay deposit = new DepositDelay(address(stake), delay);
         WithdrawDelay withdraw = new WithdrawDelay(address(stake), epoch);
         Stop stop = new Stop(address(stake), address(withdraw));
