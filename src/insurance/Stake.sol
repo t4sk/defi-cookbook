@@ -48,6 +48,11 @@ contract Stake is Auth {
     uint256 public keep;
     mapping(address usr => uint256 amt) public rewards;
 
+    // Future rate
+    uint256 public futRate;
+    // Timestamp to apply future rate
+    uint256 public fut;
+
     modifier live() {
         require(state == State.Live, "not live");
         _;
@@ -90,6 +95,7 @@ contract Stake is Auth {
     }
 
     function calc(address usr) public view returns (uint256) {
+        // TODO apply future rate
         uint256 t = Math.min(block.timestamp, exp);
         uint256 a = acc;
         if (total > 0) {
@@ -100,9 +106,20 @@ contract Stake is Auth {
 
     function sync(address usr) public returns (uint256 amt) {
         uint256 t = Math.min(block.timestamp, exp);
-        // TODO: if total = 0?
+
+        // TODO: total = 0 causes reward leakage?
+        // TODO: check code
         if (total > 0) {
-            acc += rate * (t - last) * R / total;
+            if (fut != 0 && fut <= t) {
+                acc += rate * (fut - last) * R / total;
+                acc += futRate * (t - fut) * R / total;
+
+                rate = futRate;
+                futRate = 0;
+                fut = 0;
+            } else {
+                acc += rate * (t - last) * R / total;
+            }
         }
         last = t;
 
@@ -137,42 +154,28 @@ contract Stake is Auth {
         }
     }
 
+    // TODO: dynamic rate setter
     function inc(uint256 amt) external live time {
         sync(address(0));
         token.safeTransferFrom(msg.sender, address(this), amt);
         rate += amt / (exp - block.timestamp);
     }
 
-    /*
-    function dec(uint256 amt) external live {
-        require(block.timestamp < exp, "expired");
-
-        sync(address(0));
-        uint256 dt = exp - block.timestamp;
-        uint256 rem = rate * dt;
-        amt = Math.min(rem, amt);
-
-        if (amt == rem) {
-            rate = 0;
-        } else {
-            rate -= amt / dt;
-        }
-    }
-    */
-
-    // TODO: roll + schedule new rate
-    function roll() external live time {
+    function roll(uint256 f) external live time {
         require(rate > 0, "rate = 0");
 
         sync(address(0));
-        token.safeTransferFrom(msg.sender, address(this), rate * dur);
+        if (f > 0) {
+            token.safeTransferFrom(msg.sender, address(this), f * dur);
+        }
+
+        futRate = f;
+        fut = exp;
 
         // TODO: check
-        // Atleast half the duration has elapsed
+        // Allow rolling when almost half the time is remaining
         uint256 dt = exp - block.timestamp;
-        require(dt > dur / 2, "too early");
-        // Allow rolling once per duration
-        require(dt < dur, "rolled");
+        require(dt < dur / 2, "too early");
         exp += dur;
     }
 
@@ -225,7 +228,7 @@ contract Stake is Auth {
         // Staked
         uint256 s = shares[msg.sender];
         total -= s;
-        shares[msg.sender] -= s;
+        shares[msg.sender] = 0;
 
         amt = r + s;
 
