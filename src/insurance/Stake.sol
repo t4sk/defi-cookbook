@@ -95,11 +95,15 @@ contract Stake is Auth {
     }
 
     function calc(address usr) public view returns (uint256) {
-        // TODO apply future rate
         uint256 t = Math.min(block.timestamp, exp);
         uint256 a = acc;
         if (total > 0) {
-            a += rate * (t - last) * R / total;
+            if (fut != 0 && fut <= t) {
+                a += rate * (fut - last) * R / total;
+                a += futRate * (t - fut) * R / total;
+            } else {
+                a += rate * (t - last) * R / total;
+            }
         }
         return rewards[usr] + shares[usr] * (a - accs[usr]) / R;
     }
