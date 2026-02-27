@@ -8,7 +8,13 @@
 - lending
 - auctions
 
+```shell
+# install
+forge install a16z/halmos-cheatcodes
+```
+
 ### Forge wallet setup
+
 ```shell
 # Account setup
 PK=...
