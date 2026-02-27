@@ -7,9 +7,12 @@ import {IStake} from "./lib/IStake.sol";
 import {Auth} from "./lib/Auth.sol";
 
 contract WithdrawDelay is Auth {
-    // TODO: events
     // TODO: gas golf
     using SafeTransfer for IERC20;
+
+    event Queue(address indexed usr, uint256 i, uint256 amt);
+    event Unlock(address indexed usr, uint256 i, uint256 amt);
+    event Dump(uint256 amt);
 
     IERC20 public immutable token;
     IStake public immutable stake;
@@ -30,9 +33,9 @@ contract WithdrawDelay is Auth {
 
     // Last updated epoch
     uint256 public last;
-    // Total locked amounts in the last 2 epoch
+    // Total queued amounts in the last 2 epoch
     uint256[2] public buckets;
-    bool public locked;
+    bool public dumped;
 
     constructor(address _stake, uint256 _epoch) {
         stake = IStake(_stake);
@@ -42,7 +45,7 @@ contract WithdrawDelay is Auth {
     }
 
     function queue(uint256 amt) external returns (uint256) {
-        require(!locked, "locked");
+        require(!dumped, "dumped");
 
         stake.withdraw(msg.sender, address(this), amt);
         keep += amt;
@@ -68,6 +71,8 @@ contract WithdrawDelay is Auth {
         locks[msg.sender][i] = Lock({amt: amt, exp: exp});
         counts[msg.sender] = i + 1;
 
+        emit Queue(msg.sender, i, amt);
+
         return i;
     }
 
@@ -77,8 +82,8 @@ contract WithdrawDelay is Auth {
         Lock storage lock = locks[msg.sender][i];
         require(lock.amt > 0, "lock amt = 0");
         require(lock.exp <= block.timestamp, "lock not expired");
-        if (locked) {
-            require(lock.exp <= last, "locked");
+        if (dumped) {
+            require(lock.exp <= last, "dumped");
         }
 
         uint256 amt = lock.amt;
@@ -86,10 +91,12 @@ contract WithdrawDelay is Auth {
         delete locks[msg.sender][i];
 
         token.safeTransfer(msg.sender, amt);
+
+        emit Unlock(msg.sender, i, amt);
     }
 
-    function lock() external auth returns (uint256) {
-        require(!locked, "locked");
+    function dump() external auth returns (uint256) {
+        require(!dumped, "dumped");
 
         uint256 curr = (block.timestamp / EPOCH) * EPOCH;
 
@@ -102,13 +109,15 @@ contract WithdrawDelay is Auth {
         }
 
         last = curr;
-        locked = true;
+        dumped = true;
 
         uint256 amt = buckets[0] + buckets[1];
         if (amt > 0) {
             keep -= amt;
             token.safeTransfer(msg.sender, amt);
         }
+
+        emit Dump(amt);
 
         return amt;
     }

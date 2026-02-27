@@ -7,6 +7,8 @@ import {IWithdrawDelay} from "./lib/IWithdrawDelay.sol";
 import {Auth} from "./lib/Auth.sol";
 
 contract Stop is Auth {
+    event Stop();
+
     IERC20 public immutable token;
     IStake public immutable stake;
     IWithdrawDelay public immutable withdrawDelay;
@@ -20,7 +22,8 @@ contract Stop is Auth {
     }
 
     function stop() external auth {
-        withdrawDelay.lock();
+        withdrawDelay.dump();
         stake.stop();
+        emit Stop();
     }
 }
