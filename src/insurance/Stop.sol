@@ -16,7 +16,6 @@ contract Stop is Auth {
         stake = IStake(_stake);
         token = IERC20(stake.token());
         withdrawDelay = IWithdrawDelay(_withdrawDelay);
-
         token.approve(address(stake), type(uint256).max);
     }
 

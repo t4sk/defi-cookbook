@@ -25,7 +25,7 @@ contract WithdrawDelay is Auth {
     mapping(address usr => uint256 count) public counts;
     // User => lock index => Lock
     mapping(address usr => mapping(uint256 i => Lock)) public locks;
-    // Total amount locked
+    // Total amount queued
     uint256 public keep;
 
     // Last updated epoch
