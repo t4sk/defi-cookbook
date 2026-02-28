@@ -9,7 +9,17 @@ import {Auth} from "./lib/Auth.sol";
 contract Stake is Auth {
     using SafeTransfer for IERC20;
 
-    // TODO: events
+    event Deposit(address indexed usr, uint256 amt);
+    event Withdraw(address indexed usr, uint256 amt);
+    event Take(address indexed usr, uint256 amt);
+    event Restake(address indexed usr, uint256 amt);
+    event Inc(uint256 amt);
+    event Roll();
+    event Stop();
+    event Settle(uint256 state);
+    event Cover();
+    event Exit(address indexed usr, uint256 amt);
+
     // TODO: gas golf
     // TODO: overflow dos?
 
@@ -125,6 +135,7 @@ contract Stake is Auth {
         sync(usr);
         total += amt;
         shares[usr] += amt;
+        emit Deposit(usr, amt);
     }
 
     function withdraw(address usr, address dst, uint256 amt)
@@ -137,6 +148,7 @@ contract Stake is Auth {
         total -= amt;
         shares[usr] -= amt;
         token.safeTransfer(dst, amt);
+        emit Withdraw(usr, amt);
     }
 
     function take() public returns (uint256 amt) {
@@ -147,6 +159,7 @@ contract Stake is Auth {
             keep -= amt;
             token.safeTransfer(msg.sender, amt);
         }
+        emit Take(msg.sender, amt);
     }
 
     function restake() external live time returns (uint256 amt) {
@@ -158,6 +171,7 @@ contract Stake is Auth {
             keep -= amt;
             rewards[msg.sender] = 0;
         }
+        emit Restake(msg.sender, amt);
     }
 
     // TODO: dynamic rate setter
@@ -165,6 +179,7 @@ contract Stake is Auth {
         sync(address(0));
         token.safeTransferFrom(msg.sender, address(this), amt);
         rate += amt / (exp - block.timestamp);
+        emit Inc(amt);
     }
 
     function roll(uint256 f) external live time {
@@ -184,6 +199,8 @@ contract Stake is Auth {
         uint256 dt = exp - block.timestamp;
         require(dt < dur / 2, "too early");
         exp += dur;
+
+        emit Roll();
     }
 
     function stop() external auth live time {
@@ -197,6 +214,7 @@ contract Stake is Auth {
         last = block.timestamp;
         exp = block.timestamp;
         state = State.Stopped;
+        emit Stop();
     }
 
     function settle(State s) external auth {
@@ -205,6 +223,7 @@ contract Stake is Auth {
             s == State.Covered || s == State.NotCovered, "invalid next state"
         );
         state = s;
+        emit Settle(uint256(s));
     }
 
     function cover(address src, uint256 amt, address dst) external auth {
@@ -215,6 +234,7 @@ contract Stake is Auth {
         // bal >= total + amount pulled from src + rewards
         uint256 bal = token.balanceOf(address(this));
         token.safeTransfer(dst, bal - keep);
+        emit Cover();
     }
 
     function exit() external returns (uint256 amt) {
@@ -240,6 +260,8 @@ contract Stake is Auth {
         amt = r + s;
 
         token.safeTransfer(msg.sender, amt);
+
+        emit Exit(msg.sender, amt);
     }
 
     function recover(address _token) external auth {
