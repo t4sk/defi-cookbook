@@ -6,6 +6,9 @@ import {SafeTransfer} from "../lib/SafeTransfer.sol";
 import {Math} from "../lib/Math.sol";
 import {Auth} from "./lib/Auth.sol";
 
+// TODO: gas golf
+// TODO: overflow dos?
+
 contract Stake is Auth {
     using SafeTransfer for IERC20;
 
@@ -19,9 +22,6 @@ contract Stake is Auth {
     event Settle(uint256 state);
     event Cover();
     event Exit(address indexed usr, uint256 amt);
-
-    // TODO: gas golf
-    // TODO: overflow dos?
 
     // Rate scale
     uint256 private constant R = 1e18;
@@ -155,8 +155,8 @@ contract Stake is Auth {
         sync(msg.sender);
         amt = rewards[msg.sender];
         if (amt > 0) {
-            rewards[msg.sender] = 0;
             keep -= amt;
+            rewards[msg.sender] = 0;
             token.safeTransfer(msg.sender, amt);
         }
         emit Take(msg.sender, amt);
@@ -254,8 +254,8 @@ contract Stake is Auth {
 
         // Staked
         uint256 s = shares[msg.sender];
-        total -= s;
         shares[msg.sender] = 0;
+        total -= s;
 
         amt = r + s;
 
