@@ -208,6 +208,7 @@ contract Stake is Auth {
         sync(address(0));
         uint256 a1 = acc;
 
+        // TODO: need high precision?
         keep += (a1 - a0) * total / R;
 
         // Stop rewards
