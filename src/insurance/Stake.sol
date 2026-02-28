@@ -166,10 +166,10 @@ contract Stake is Auth {
         sync(msg.sender);
         amt = rewards[msg.sender];
         if (amt > 0) {
-            total += amt;
-            shares[msg.sender] += amt;
             keep -= amt;
             rewards[msg.sender] = 0;
+            total += amt;
+            shares[msg.sender] += amt;
         }
         emit Restake(msg.sender, amt);
     }
