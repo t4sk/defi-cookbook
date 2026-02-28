@@ -252,11 +252,10 @@ contract Stake is Auth {
         uint256 r = rewards[msg.sender];
         rewards[msg.sender] = 0;
         // Account for imprecision after stop
-        if (!stopped()) {
-            keep -= r;
-        } else {
-            keep -= Math.min(r, keep);
+        if (stopped()) {
+            r = Math.min(r, keep);
         }
+        keep -= r;
 
         // Staked
         uint256 s = shares[msg.sender];
@@ -277,7 +276,11 @@ contract Stake is Auth {
         } else if (_token == address(token)) {
             // TODO: fix
             uint256 bal = token.balanceOf(address(this));
-            token.safeTransfer(msg.sender, bal - keep);
+            if (stopped()) {
+                token.safeTransfer(msg.sender, bal - (total + keep));
+            } else {
+                // TODO
+            }
         } else {
             uint256 bal = IERC20(_token).balanceOf(address(this));
             IERC20(_token).safeTransfer(msg.sender, bal);
