@@ -178,6 +178,7 @@ contract Stake is Auth {
     function inc(uint256 amt) external live time {
         sync(address(0));
         token.safeTransferFrom(msg.sender, address(this), amt);
+        // TODO:recover dust?
         rate += amt / (exp - block.timestamp);
         emit Inc(amt);
     }
@@ -194,10 +195,8 @@ contract Stake is Auth {
         futRate = f;
         fut = exp;
 
-        // TODO: check
-        // Allow rolling when almost half the time is remaining
-        uint256 dt = exp - block.timestamp;
-        require(dt < dur / 2, "too early");
+        // Allow rolling when time remaining is < half the duration
+        require(exp - block.timestamp < dur / 2, "too early");
         exp += dur;
 
         emit Roll();
@@ -209,7 +208,8 @@ contract Stake is Auth {
         uint256 a1 = acc;
 
         // TODO: need high precision?
-        keep += (a1 - a0) * total / R;
+        // Round up by 1
+        keep += (a1 - a0) * total / R + 1;
 
         // Stop rewards
         last = block.timestamp;
@@ -232,7 +232,7 @@ contract Stake is Auth {
 
         token.safeTransferFrom(src, address(this), amt);
 
-        // bal >= total + amount pulled from src + rewards
+        // bal >= total + amount pulled from src + rewards to be paid out
         uint256 bal = token.balanceOf(address(this));
         token.safeTransfer(dst, bal - keep);
         emit Cover();
@@ -251,7 +251,12 @@ contract Stake is Auth {
         // Rewards
         uint256 r = rewards[msg.sender];
         rewards[msg.sender] = 0;
-        keep -= r;
+        // Account for imprecision after stop
+        if (!stopped()) {
+            keep -= r;
+        } else {
+            keep -= Math.min(r, keep);
+        }
 
         // Staked
         uint256 s = shares[msg.sender];
