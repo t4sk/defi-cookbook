@@ -7,7 +7,7 @@ import {Math} from "../lib/Math.sol";
 import {Auth} from "./lib/Auth.sol";
 
 // TODO: gas golf
-// TODO: overflow dos?
+// TODO: dynamic rate setter
 
 contract Stake is Auth {
     using SafeTransfer for IERC20;
@@ -193,28 +193,25 @@ contract Stake is Auth {
             rewards[msg.sender] = 0;
             total += amt;
             shares[msg.sender] += amt;
+            require(shares[msg.sender] >= dust, "dust");
         }
         emit Restake(msg.sender, amt);
     }
 
-    // TODO: dynamic rate setter
     function inc(uint256 amt) external live time {
         sync(address(0));
         token.safeTransferFrom(msg.sender, address(this), amt);
-        // TODO:recover dust?
-        // TODO: clean up
-        if (next > 0) {
-            rate += amt / (next - block.timestamp);
-        } else {
-            rate += amt / (exp - block.timestamp);
-        }
+
+        uint256 t = next > 0 ? next : exp;
+        rate += amt / (t - block.timestamp);
+
         emit Inc(amt);
     }
 
     function roll(uint256 r) external live time {
         require(msg.sender == roller, "not roller");
         require(rate > 0, "rate = 0");
-        require(next == 0, "already rolled");
+        require(next == 0, "rolled");
 
         sync(address(0));
         if (r > 0) {
