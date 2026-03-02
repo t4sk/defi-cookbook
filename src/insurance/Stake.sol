@@ -233,6 +233,7 @@ contract Stake is Auth {
         sync(address(0));
         uint256 a1 = acc;
 
+        // TODO: fix - only accounts for total rewards from last update of acc
         // Round up by 1
         keep += (a1 - a0) * total / R + 1;
 
@@ -299,6 +300,7 @@ contract Stake is Auth {
             (bool ok,) = msg.sender.call{value: address(this).balance}("");
             require(ok, "send ETH failed");
         } else if (_token == address(token)) {
+            // TODO: fix - only accounts for total rewards from last update of acc
             uint256 a0 = acc;
             sync(address(0));
             uint256 a1 = acc;
