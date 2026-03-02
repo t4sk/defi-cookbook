@@ -233,7 +233,6 @@ contract Stake is Auth {
         sync(address(0));
         uint256 a1 = acc;
 
-        // TODO: need high precision?
         // Round up by 1
         keep += (a1 - a0) * total / R + 1;
 
@@ -304,6 +303,7 @@ contract Stake is Auth {
             sync(address(0));
             uint256 a1 = acc;
 
+            // Round up by 1
             uint256 k = keep + (a1 - a0) * total / R + 1;
             uint256 bal = token.balanceOf(address(this));
             uint256 amt = bal - (total + k + pot());
