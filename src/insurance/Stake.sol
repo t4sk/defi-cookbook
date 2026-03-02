@@ -90,15 +90,32 @@ contract Stake is Auth {
     function calc(address usr) external view returns (uint256) {
         uint256 t = Math.min(block.timestamp, exp);
         uint256 a = acc;
-        if (total > 0) {
-            if (fut != 0 && fut <= t) {
+        if (fut != 0 && fut <= t) {
+            if (total > 0) {
                 a += rate * (fut - last) * R / total;
                 a += futRate * (t - fut) * R / total;
-            } else {
+            }
+        } else {
+            if (total > 0) {
                 a += rate * (t - last) * R / total;
             }
         }
         return rewards[usr] + shares[usr] * (a - accs[usr]) / R;
+    }
+
+    function pot() public view returns (uint256 rem) {
+        if (fut > 0) {
+            if (block.timestamp < fut) {
+                rem = rate * (fut - block.timestamp);
+                rem += futRate * dur;
+            } else if (block.timestamp < exp) {
+                rem = futRate * (exp - block.timestamp);
+            }
+        } else {
+            if (block.timestamp < exp) {
+                rem = rate * (exp - block.timestamp);
+            }
+        }
     }
 
     function sync(address usr) public returns (uint256 amt) {
@@ -106,15 +123,16 @@ contract Stake is Auth {
 
         // TODO: fix total = 0 causes reward leakage?
         // TODO: check code
-        if (total > 0) {
-            if (fut != 0 && fut <= t) {
+        if (fut != 0 && fut <= t) {
+            if (total > 0) {
                 acc += rate * (fut - last) * R / total;
                 acc += futRate * (t - fut) * R / total;
-
-                rate = futRate;
-                futRate = 0;
-                fut = 0;
-            } else {
+            }
+            rate = futRate;
+            futRate = 0;
+            fut = 0;
+        } else {
+            if (total > 0) {
                 acc += rate * (t - last) * R / total;
             }
         }
@@ -179,13 +197,19 @@ contract Stake is Auth {
         sync(address(0));
         token.safeTransferFrom(msg.sender, address(this), amt);
         // TODO:recover dust?
-        rate += amt / (exp - block.timestamp);
+        // TODO: clean up
+        if (fut > 0) {
+            rate += amt / (fut - block.timestamp);
+        } else {
+            rate += amt / (exp - block.timestamp);
+        }
         emit Inc(amt);
     }
 
     function roll(uint256 f) external live time {
         require(msg.sender == roller, "not roller");
         require(rate > 0, "rate = 0");
+        require(fut == 0, "already rolled");
 
         sync(address(0));
         if (f > 0) {
@@ -274,13 +298,15 @@ contract Stake is Auth {
             (bool ok,) = msg.sender.call{value: address(this).balance}("");
             require(ok, "send ETH failed");
         } else if (_token == address(token)) {
-            // TODO: fix
+            uint256 a0 = acc;
+            sync(address(0));
+            uint256 a1 = acc;
+
+            uint256 k = keep + (a1 - a0) * total / R + 1;
             uint256 bal = token.balanceOf(address(this));
-            if (stopped()) {
-                token.safeTransfer(msg.sender, bal - (total + keep));
-            } else {
-                // TODO
-            }
+            uint256 amt = bal - (total + k + pot());
+
+            token.safeTransfer(msg.sender, amt);
         } else {
             uint256 bal = IERC20(_token).balanceOf(address(this));
             IERC20(_token).safeTransfer(msg.sender, bal);
