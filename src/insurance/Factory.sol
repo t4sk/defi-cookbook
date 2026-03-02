@@ -12,13 +12,13 @@ contract Factory {
     function create(
         address token,
         uint256 dur,
-        address roller,
+        address insuree,
         uint256 dust,
         uint256 delay,
         uint256 epoch
     ) external {
         // TODO: input validations
-        Stake stake = new Stake(token, dur, roller, dust);
+        Stake stake = new Stake(token, dur, insuree, dust);
         DepositDelay deposit = new DepositDelay(address(stake), delay);
         WithdrawDelay withdraw = new WithdrawDelay(address(stake), epoch);
         Stop stop = new Stop(address(stake), address(withdraw));
