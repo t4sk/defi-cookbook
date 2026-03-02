@@ -57,10 +57,10 @@ contract Stake is Auth {
     uint256 public keep;
     mapping(address usr => uint256 amt) public rewards;
 
-    // Future rate
-    uint256 public futRate;
-    // Timestamp to apply future rate
-    uint256 public fut;
+    // Next rate
+    uint256 public nextRate;
+    // Timestamp to apply next rate
+    uint256 public next;
     // Authorized account to call roll
     address public roller;
 
@@ -87,13 +87,29 @@ contract Stake is Auth {
         return uint256(state) > uint256(State.Live);
     }
 
+    // Remaining rewards
+    function pot() public view returns (uint256 rem) {
+        if (next > 0) {
+            if (block.timestamp < next) {
+                rem = rate * (next - block.timestamp);
+                rem += nextRate * dur;
+            } else if (block.timestamp < exp) {
+                rem = nextRate * (exp - block.timestamp);
+            }
+        } else {
+            if (block.timestamp < exp) {
+                rem = rate * (exp - block.timestamp);
+            }
+        }
+    }
+
     function calc(address usr) external view returns (uint256) {
         uint256 t = Math.min(block.timestamp, exp);
         uint256 a = acc;
-        if (fut != 0 && fut <= t) {
+        if (next != 0 && next <= t) {
             if (total > 0) {
-                a += rate * (fut - last) * R / total;
-                a += futRate * (t - fut) * R / total;
+                a += rate * (next - last) * R / total;
+                a += nextRate * (t - next) * R / total;
             }
         } else {
             if (total > 0) {
@@ -103,34 +119,19 @@ contract Stake is Auth {
         return rewards[usr] + shares[usr] * (a - accs[usr]) / R;
     }
 
-    function pot() public view returns (uint256 rem) {
-        if (fut > 0) {
-            if (block.timestamp < fut) {
-                rem = rate * (fut - block.timestamp);
-                rem += futRate * dur;
-            } else if (block.timestamp < exp) {
-                rem = futRate * (exp - block.timestamp);
-            }
-        } else {
-            if (block.timestamp < exp) {
-                rem = rate * (exp - block.timestamp);
-            }
-        }
-    }
-
     function sync(address usr) public returns (uint256 amt) {
         uint256 t = Math.min(block.timestamp, exp);
 
         // TODO: fix total = 0 causes reward leakage?
         // TODO: check code
-        if (fut != 0 && fut <= t) {
+        if (next != 0 && next <= t) {
             if (total > 0) {
-                acc += rate * (fut - last) * R / total;
-                acc += futRate * (t - fut) * R / total;
+                acc += rate * (next - last) * R / total;
+                acc += nextRate * (t - next) * R / total;
             }
-            rate = futRate;
-            futRate = 0;
-            fut = 0;
+            rate = nextRate;
+            nextRate = 0;
+            next = 0;
         } else {
             if (total > 0) {
                 acc += rate * (t - last) * R / total;
@@ -198,26 +199,26 @@ contract Stake is Auth {
         token.safeTransferFrom(msg.sender, address(this), amt);
         // TODO:recover dust?
         // TODO: clean up
-        if (fut > 0) {
-            rate += amt / (fut - block.timestamp);
+        if (next > 0) {
+            rate += amt / (next - block.timestamp);
         } else {
             rate += amt / (exp - block.timestamp);
         }
         emit Inc(amt);
     }
 
-    function roll(uint256 f) external live time {
+    function roll(uint256 r) external live time {
         require(msg.sender == roller, "not roller");
         require(rate > 0, "rate = 0");
-        require(fut == 0, "already rolled");
+        require(next == 0, "already rolled");
 
         sync(address(0));
-        if (f > 0) {
-            token.safeTransferFrom(msg.sender, address(this), f * dur);
+        if (r > 0) {
+            token.safeTransferFrom(msg.sender, address(this), r * dur);
         }
 
-        futRate = f;
-        fut = exp;
+        nextRate = r;
+        next = exp;
 
         // Allow rolling when time remaining is < half the duration
         require(exp - block.timestamp < dur / 2, "too early");
