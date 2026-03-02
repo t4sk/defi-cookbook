@@ -28,6 +28,8 @@ contract Stake is Auth {
     IERC20 public immutable token;
     // Reward duration
     uint256 public immutable dur;
+    // Minimum amount to deposit and must remain in stake
+    uint256 public immutable dust;
 
     enum State {
         Live,
@@ -74,13 +76,14 @@ contract Stake is Auth {
         _;
     }
 
-    constructor(address _token, uint256 _dur, address _roller) {
+    constructor(address _token, uint256 _dur, address _roller, uint256 _dust) {
         token = IERC20(_token);
         last = block.timestamp;
         exp = block.timestamp + _dur;
         dur = _dur;
         state = State.Live;
         roller = _roller;
+        dust = _dust;
     }
 
     function stopped() public view returns (bool) {
@@ -106,12 +109,13 @@ contract Stake is Auth {
     function calc(address usr) external view returns (uint256) {
         uint256 t = Math.min(block.timestamp, exp);
         uint256 a = acc;
-        if (next != 0 && next <= t) {
+        if (next > 0 && next <= t) {
             if (total > 0) {
                 a += rate * (next - last) * R / total;
                 a += nextRate * (t - next) * R / total;
             }
         } else {
+            // Next rate is not set or current time < next rate update time
             if (total > 0) {
                 a += rate * (t - last) * R / total;
             }
@@ -122,9 +126,7 @@ contract Stake is Auth {
     function sync(address usr) public returns (uint256 amt) {
         uint256 t = Math.min(block.timestamp, exp);
 
-        // TODO: fix total = 0 causes reward leakage?
-        // TODO: check code
-        if (next != 0 && next <= t) {
+        if (next > 0 && next <= t) {
             if (total > 0) {
                 acc += rate * (next - last) * R / total;
                 acc += nextRate * (t - next) * R / total;
@@ -150,6 +152,7 @@ contract Stake is Auth {
     }
 
     function deposit(address usr, uint256 amt) external auth live time {
+        require(amt >= dust, "dust");
         token.safeTransferFrom(msg.sender, address(this), amt);
         sync(usr);
         total += amt;
@@ -166,6 +169,7 @@ contract Stake is Auth {
         sync(usr);
         total -= amt;
         shares[usr] -= amt;
+        require(shares[usr] == 0 || shares[usr] >= dust, "dust");
         token.safeTransfer(dst, amt);
         emit Withdraw(usr, amt);
     }
