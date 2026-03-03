@@ -56,8 +56,6 @@ contract Stake is Auth {
     uint256 public acc;
     // User => last rate accumulator
     mapping(address usr => uint256 acc) public accs;
-    // Rewards remaining after stop
-    uint256 public keep;
     mapping(address usr => uint256 amt) public rewards;
 
     // Next rate
@@ -66,6 +64,13 @@ contract Stake is Auth {
     uint256 public next;
     // Authorized account to call roll
     address public insuree;
+
+    // Rewards remaining after stop
+    uint256 public keep;
+    // Total amount of rewards deposited
+    uint256 public topped;
+    // Total amount of rewards claimed (transferred out or restaked)
+    uint256 public paid;
 
     modifier live() {
         require(state == State.Live, "not live");
@@ -86,7 +91,7 @@ contract Stake is Auth {
         insuree = _insuree;
         dust = _dust;
 
-        // total + 1 so that insuree call claim rewards while no one staked
+        // Insuree can claim rewards while no one staked
         total = 1;
         shares[address(this)] = 1;
     }
@@ -111,6 +116,7 @@ contract Stake is Auth {
         }
     }
 
+    // Calculate claimable rewards of a user
     function calc(address usr) external view returns (uint256) {
         uint256 t = Math.min(block.timestamp, exp);
         uint256 a = acc;
@@ -124,6 +130,7 @@ contract Stake is Auth {
         return rewards[usr] + shares[usr] * (a - accs[usr]) / R;
     }
 
+    // Sync rewards
     function sync(address usr) public returns (uint256 amt) {
         uint256 t = Math.min(block.timestamp, exp);
 
@@ -173,9 +180,23 @@ contract Stake is Auth {
         amt = rewards[msg.sender];
         if (amt > 0) {
             rewards[msg.sender] = 0;
+            paid += amt;
             token.safeTransfer(msg.sender, amt);
         }
         emit Take(msg.sender, amt);
+    }
+
+    function restake() external live time returns (uint256 amt) {
+        sync(msg.sender);
+        amt = rewards[msg.sender];
+        if (amt > 0) {
+            rewards[msg.sender] = 0;
+            paid += amt;
+            total += amt;
+            shares[msg.sender] += amt;
+            require(shares[msg.sender] >= dust, "dust");
+        }
+        emit Restake(msg.sender, amt);
     }
 
     function refund() external returns (uint256 amt) {
@@ -185,21 +206,19 @@ contract Stake is Auth {
         amt = rewards[address(this)];
         if (amt > 0) {
             rewards[address(this)] = 0;
+            paid += amt;
+        }
+
+        if (keep > 0) {
+            amt += keep;
+            paid += keep;
+            keep = 0;
+        }
+
+        if (amt > 0) {
             token.safeTransfer(msg.sender, amt);
         }
         emit Refund(msg.sender, amt);
-    }
-
-    function restake() external live time returns (uint256 amt) {
-        sync(msg.sender);
-        amt = rewards[msg.sender];
-        if (amt > 0) {
-            rewards[msg.sender] = 0;
-            total += amt;
-            shares[msg.sender] += amt;
-            require(shares[msg.sender] >= dust, "dust");
-        }
-        emit Restake(msg.sender, amt);
     }
 
     function inc(uint256 amt) external live time {
@@ -208,6 +227,7 @@ contract Stake is Auth {
 
         uint256 t = next > 0 ? next : exp;
         rate += amt / (t - block.timestamp);
+        topped += amt;
 
         emit Inc(amt);
     }
@@ -222,6 +242,7 @@ contract Stake is Auth {
         sync(address(0));
         if (r > 0) {
             token.safeTransferFrom(msg.sender, address(this), r * dur);
+            topped += r * dur;
         }
 
         nextRate = r;
@@ -234,7 +255,6 @@ contract Stake is Auth {
     function stop() external auth live time {
         sync(address(0));
         keep = pot();
-        last = block.timestamp;
         exp = block.timestamp;
         state = State.Stopped;
         emit Stop();
@@ -254,9 +274,8 @@ contract Stake is Auth {
 
         token.safeTransferFrom(src, address(this), amt);
 
-        amt += (total - 1) + keep;
+        amt += (total - 1);
         total = 1;
-        keep = 0;
 
         token.safeTransfer(dst, amt);
 
@@ -276,6 +295,7 @@ contract Stake is Auth {
         // Rewards
         uint256 r = rewards[msg.sender];
         rewards[msg.sender] = 0;
+        paid += r;
 
         // Staked
         uint256 s = shares[msg.sender];
@@ -294,17 +314,12 @@ contract Stake is Auth {
             (bool ok,) = msg.sender.call{value: address(this).balance}("");
             require(ok, "send ETH failed");
         } else if (_token == address(token)) {
-            /*
-            // TODO: fix
-            sync(address(0));
-
-            // Round up by 1
-            uint256 k = keep + (a1 - a0) * total / R + 1;
             uint256 bal = token.balanceOf(address(this));
-            uint256 amt = bal - (total + k + pot());
-
-            token.safeTransfer(msg.sender, amt);
-            */
+            // topped >= paid
+            // topped - paid = future reward emissions + rewards claimable by stakers
+            // bal >= staked + topped - paid
+            uint256 need = (total - 1) + topped - paid;
+            token.safeTransfer(msg.sender, bal - need);
         } else {
             uint256 bal = IERC20(_token).balanceOf(address(this));
             IERC20(_token).safeTransfer(msg.sender, bal);
