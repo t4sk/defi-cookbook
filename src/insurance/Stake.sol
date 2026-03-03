@@ -35,8 +35,8 @@ contract Stake is Auth {
     enum State {
         Live,
         Stopped,
-        Covered,
-        NotCovered
+        Cover,
+        NoCover
     }
 
     State public state;
@@ -262,15 +262,13 @@ contract Stake is Auth {
 
     function settle(State s) external auth {
         require(state == State.Stopped, "not stopped");
-        require(
-            s == State.Covered || s == State.NotCovered, "invalid next state"
-        );
+        require(s == State.Cover || s == State.NoCover, "invalid next state");
         state = s;
         emit Settle(uint256(s));
     }
 
     function cover(address src, uint256 amt, address dst) external auth {
-        require(state == State.Covered, "invalid state");
+        require(state == State.Cover, "invalid state");
 
         token.safeTransferFrom(src, address(this), amt);
 
@@ -287,7 +285,7 @@ contract Stake is Auth {
         if (state == State.Live) {
             require(exp < block.timestamp, "not expired");
         } else {
-            require(state == State.NotCovered, "invalid state");
+            require(state == State.NoCover, "invalid state");
         }
 
         sync(msg.sender);
