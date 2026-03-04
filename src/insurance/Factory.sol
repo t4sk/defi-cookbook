@@ -7,8 +7,16 @@ import {WithdrawDelay} from "./WithdrawDelay.sol";
 import {Stop} from "./Stop.sol";
 
 // TODO: events
-// TODO: minimal proxy?
 contract Factory {
+    event Create(
+        address indexed insuree,
+        address indexed token,
+        address stake,
+        address deposit,
+        address withdraw,
+        address stop
+    );
+
     function create(
         address token,
         uint256 dur,
@@ -16,7 +24,7 @@ contract Factory {
         uint256 dust,
         uint256 delay,
         uint256 epoch
-    ) external {
+    ) external returns (address, address, address, address) {
         // TODO: input validations
         Stake stake = new Stake(token, dur, insuree, dust);
         DepositDelay deposit = new DepositDelay(address(stake), delay);
@@ -37,5 +45,17 @@ contract Factory {
         deposit.deny(address(this));
         withdraw.deny(address(this));
         stop.deny(address(this));
+
+        emit Create(
+            insuree,
+            token,
+            address(stake),
+            address(deposit),
+            address(withdraw),
+            address(stop)
+        );
+
+        return
+            (address(stake), address(deposit), address(withdraw), address(stop));
     }
 }
