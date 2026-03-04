@@ -36,7 +36,7 @@ contract Stake is Auth {
         Live,
         Stopped,
         Cover,
-        NoCover
+        Exit
     }
 
     State public state;
@@ -74,10 +74,6 @@ contract Stake is Auth {
 
     modifier live() {
         require(state == State.Live, "not live");
-        _;
-    }
-
-    modifier time() {
         require(block.timestamp < exp, "expired");
         _;
     }
@@ -118,8 +114,10 @@ contract Stake is Auth {
 
     // Calculate claimable rewards of a user
     function calc(address usr) external view returns (uint256) {
+        // Cap timestamp to exp
         uint256 t = Math.min(block.timestamp, exp);
         uint256 a = acc;
+        // block.timestamp passed next rate update time
         if (next > 0 && next <= t) {
             a += rate * (next - last) * R / total;
             a += nextRate * (t - next) * R / total;
@@ -132,27 +130,29 @@ contract Stake is Auth {
 
     // Sync rewards
     function sync(address usr) public returns (uint256 amt) {
+        // Cap timestamp to exp
         uint256 t = Math.min(block.timestamp, exp);
-
+        uint256 a = acc;
         if (next > 0 && next <= t) {
-            acc += rate * (next - last) * R / total;
-            acc += nextRate * (t - next) * R / total;
+            a += rate * (next - last) * R / total;
+            a += nextRate * (t - next) * R / total;
             rate = nextRate;
             nextRate = 0;
             next = 0;
         } else {
-            acc += rate * (t - last) * R / total;
+            a += rate * (t - last) * R / total;
         }
+        acc = a;
         last = t;
 
         if (usr != address(0)) {
-            amt = shares[usr] * (acc - accs[usr]) / R;
-            accs[usr] = acc;
+            amt = shares[usr] * (a - accs[usr]) / R;
+            accs[usr] = a;
             rewards[usr] += amt;
         }
     }
 
-    function deposit(address usr, uint256 amt) external auth live time {
+    function deposit(address usr, uint256 amt) external auth live {
         require(amt >= dust, "dust");
         token.safeTransferFrom(msg.sender, address(this), amt);
         sync(usr);
@@ -165,7 +165,6 @@ contract Stake is Auth {
         external
         auth
         live
-        time
     {
         sync(usr);
         total -= amt;
@@ -186,7 +185,7 @@ contract Stake is Auth {
         emit Take(msg.sender, amt);
     }
 
-    function restake() external live time returns (uint256 amt) {
+    function restake() external live returns (uint256 amt) {
         sync(msg.sender);
         amt = rewards[msg.sender];
         if (amt > 0) {
@@ -221,18 +220,20 @@ contract Stake is Auth {
         emit Refund(msg.sender, amt);
     }
 
-    function inc(uint256 amt) external live time {
+    function inc(uint256 amt) external live {
         sync(address(0));
         token.safeTransferFrom(msg.sender, address(this), amt);
 
         uint256 t = next > 0 ? next : exp;
-        rate += amt / (t - block.timestamp);
+        uint256 delta = amt / (t - block.timestamp);
+        require(delta > 0, "delta rate = 0");
+        rate += delta;
         topped += amt;
 
         emit Inc(amt);
     }
 
-    function roll(uint256 r) external live time {
+    function roll(uint256 r) external live {
         require(msg.sender == insuree, "not insuree");
         require(rate > 0, "rate = 0");
         require(next == 0, "rolled");
@@ -252,7 +253,7 @@ contract Stake is Auth {
         emit Roll(r);
     }
 
-    function stop() external auth live time {
+    function stop() external auth live {
         sync(address(0));
         keep = pot();
         exp = block.timestamp;
@@ -262,15 +263,21 @@ contract Stake is Auth {
 
     function settle(State s) external auth {
         require(state == State.Stopped, "not stopped");
-        require(s == State.Cover || s == State.NoCover, "invalid next state");
+        require(s == State.Cover || s == State.Exit, "invalid next state");
         state = s;
         emit Settle(uint256(s));
     }
 
-    function cover(address src, uint256 amt, address dst) external auth {
+    function cover(address src, uint256 amt, address dst)
+        external
+        auth
+        returns (uint256)
+    {
         require(state == State.Cover, "invalid state");
 
-        token.safeTransferFrom(src, address(this), amt);
+        if (amt > 0) {
+            token.safeTransferFrom(src, address(this), amt);
+        }
 
         amt += (total - 1);
         total = 1;
@@ -278,6 +285,7 @@ contract Stake is Auth {
         token.safeTransfer(dst, amt);
 
         emit Cover(amt);
+        return amt;
     }
 
     function exit() external returns (uint256 amt) {
@@ -285,7 +293,7 @@ contract Stake is Auth {
         if (state == State.Live) {
             require(exp < block.timestamp, "not expired");
         } else {
-            require(state == State.NoCover, "invalid state");
+            require(state == State.Exit, "invalid state");
         }
 
         sync(msg.sender);
