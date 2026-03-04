@@ -467,7 +467,38 @@ contract StakeTest is Test {
         assertEq(stake.exit(), 0);
     }
 
-    // recover
+    function test_recover() public {
+        address usr = users[0];
+        uint256 amt = DUST;
+        stake.deposit(usr, amt);
+
+        skip(DUR / 2);
+
+        vm.prank(usr);
+        stake.take();
+
+        vm.prank(INSUREE);
+        stake.refund();
+
+        token.transfer(address(stake), 1);
+
+        helper.set("before", token.balanceOf(address(this)));
+        stake.recover(address(token));
+        helper.set("after", token.balanceOf(address(this)));
+
+        int256 delta = helper.delta("after", "before");
+        assertEq(delta, 1);
+    }
+
+    function test_recover_not_auth() public {
+        vm.expectRevert("not auth");
+        vm.prank(users[0]);
+        stake.recover(address(token));
+    }
+
+    // TODO: test pot
+    // TODO: test calc
+    // TODO: test sync
 
     // sync
     // - address(0)
@@ -476,11 +507,6 @@ contract StakeTest is Test {
     // - not staker
     // - before exp, after exp
     // - next rate
-
-    // TODO: test stopped
-    // TODO: test pot
-    // TODO: test calc
-    // TODO: test sync
 
     // TODO: integration - fuzz + sim
     // TODO: invariants
