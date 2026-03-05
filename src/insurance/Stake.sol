@@ -87,7 +87,7 @@ contract Stake is Auth {
         dust = _dust;
 
         // Insuree can claim rewards while no one staked
-        total = 1;
+        // Some calculations are done with total + 1 to account for this share
         shares[address(this)] = 1;
     }
 
@@ -118,12 +118,12 @@ contract Stake is Auth {
         uint256 a = acc;
         uint256 tot = total;
         // Rate capped at total staked / dur
-        uint256 cap = t > last ? (tot - 1) / (t - last) : type(uint256).max;
+        uint256 cap = t > last ? tot / (t - last) : type(uint256).max;
         if (next > 0 && next <= t) {
-            a += Math.min(rate, cap) * (next - last) * R / tot;
-            a += Math.min(nextRate, cap) * (t - next) * R / tot;
+            a += Math.min(rate, cap) * (next - last) * R / (tot + 1);
+            a += Math.min(nextRate, cap) * (t - next) * R / (tot + 1);
         } else {
-            a += Math.min(rate, cap) * (t - last) * R / tot;
+            a += Math.min(rate, cap) * (t - last) * R / (tot + 1);
         }
         return rewards[usr] + shares[usr] * (a - accs[usr]) / R;
     }
@@ -136,8 +136,8 @@ contract Stake is Auth {
         uint256 tot = total;
         // Rewards streamed to stakers capped at total staked
         // Rate capped at total staked / dt
-        // cap * dt <= total - 1
-        uint256 cap = t > last ? (tot - 1) / (t - last) : type(uint256).max;
+        // cap * dt <= total
+        uint256 cap = t > last ? tot / (t - last) : type(uint256).max;
         // Save excess for insuree
         uint256 saved = 0;
 
@@ -146,8 +146,8 @@ contract Stake is Auth {
             uint256 nr = Math.min(nextRate, cap);
             uint256 dt0 = next - last;
             uint256 dt1 = t - next;
-            a += r * dt0 * R / tot;
-            a += nr * dt1 * R / tot;
+            a += r * dt0 * R / (tot + 1);
+            a += nr * dt1 * R / (tot + 1);
             saved = (rate - r) * dt0 + (nextRate - nr) * dt1;
             rate = nextRate;
             nextRate = 0;
@@ -155,7 +155,7 @@ contract Stake is Auth {
         } else {
             uint256 r = Math.min(rate, cap);
             uint256 dt = t - last;
-            a += r * dt * R / tot;
+            a += r * dt * R / (tot + 1);
             saved = (rate - r) * dt;
         }
         acc = a;
@@ -173,6 +173,7 @@ contract Stake is Auth {
     }
 
     function deposit(address usr, uint256 amt) external auth live {
+        require(usr != address(this), "invalid usr");
         require(amt >= dust, "dust");
         token.safeTransferFrom(msg.sender, address(this), amt);
         sync(usr);
@@ -186,6 +187,7 @@ contract Stake is Auth {
         auth
         live
     {
+        require(usr != address(this), "invalid usr");
         sync(usr);
         total -= amt;
         shares[usr] -= amt;
@@ -299,8 +301,8 @@ contract Stake is Auth {
             token.safeTransferFrom(src, address(this), amt);
         }
 
-        amt += (total - 1);
-        total = 1;
+        amt += total;
+        total = 0;
 
         token.safeTransfer(dst, amt);
 
@@ -344,7 +346,7 @@ contract Stake is Auth {
             // topped >= paid
             // topped - paid = future reward emissions + rewards claimable by stakers
             // bal >= staked + topped - paid
-            uint256 need = (total - 1) + topped - paid;
+            uint256 need = total + topped - paid;
             token.safeTransfer(msg.sender, bal - need);
         } else {
             uint256 bal = IERC20(_token).balanceOf(address(this));
