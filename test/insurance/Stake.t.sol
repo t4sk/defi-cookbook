@@ -511,4 +511,5 @@ contract StakeTest is Test {
     // TODO: integration - fuzz + sim
     // TODO: invariants
     // - cannot earn rewards beyond exp
+    // - Emissions in any single sync interval never exceed total staked.
 }

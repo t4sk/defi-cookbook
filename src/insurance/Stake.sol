@@ -7,7 +7,6 @@ import {Math} from "../lib/Math.sol";
 import {Auth} from "./lib/Auth.sol";
 
 // TODO: gas golf
-// TODO: dynamic rate setter
 
 contract Stake is Auth {
     using SafeTransfer for IERC20;
@@ -117,13 +116,14 @@ contract Stake is Auth {
         // Cap timestamp to exp
         uint256 t = Math.min(block.timestamp, exp);
         uint256 a = acc;
-        // block.timestamp passed next rate update time
+        uint256 tot = total;
+        // Rate capped at total staked / dur
+        uint256 cap = t > last ? (tot - 1) / (t - last) : type(uint256).max;
         if (next > 0 && next <= t) {
-            a += rate * (next - last) * R / total;
-            a += nextRate * (t - next) * R / total;
+            a += Math.min(rate, cap) * (next - last) * R / tot;
+            a += Math.min(nextRate, cap) * (t - next) * R / tot;
         } else {
-            // Next rate is not set or current time < next rate update time
-            a += rate * (t - last) * R / total;
+            a += Math.min(rate, cap) * (t - last) * R / tot;
         }
         return rewards[usr] + shares[usr] * (a - accs[usr]) / R;
     }
@@ -133,17 +133,37 @@ contract Stake is Auth {
         // Cap timestamp to exp
         uint256 t = Math.min(block.timestamp, exp);
         uint256 a = acc;
+        uint256 tot = total;
+        // Rewards streamed to stakers capped at total staked
+        // Rate capped at total staked / dt
+        // cap * dt <= total - 1
+        uint256 cap = t > last ? (tot - 1) / (t - last) : type(uint256).max;
+        // Save excess for insuree
+        uint256 saved = 0;
+
         if (next > 0 && next <= t) {
-            a += rate * (next - last) * R / total;
-            a += nextRate * (t - next) * R / total;
+            uint256 r = Math.min(rate, cap);
+            uint256 nr = Math.min(nextRate, cap);
+            uint256 dt0 = next - last;
+            uint256 dt1 = t - next;
+            a += r * dt0 * R / tot;
+            a += nr * dt1 * R / tot;
+            saved = (rate - r) * dt0 + (nextRate - nr) * dt1;
             rate = nextRate;
             nextRate = 0;
             next = 0;
         } else {
-            a += rate * (t - last) * R / total;
+            uint256 r = Math.min(rate, cap);
+            uint256 dt = t - last;
+            a += r * dt * R / tot;
+            saved = (rate - r) * dt;
         }
         acc = a;
         last = t;
+
+        if (saved > 0) {
+            keep += saved;
+        }
 
         if (usr != address(0)) {
             amt = shares[usr] * (a - accs[usr]) / R;
@@ -255,7 +275,7 @@ contract Stake is Auth {
 
     function stop() external auth live {
         sync(address(0));
-        keep = pot();
+        keep += pot();
         exp = block.timestamp;
         state = State.Stopped;
         emit Stop();
