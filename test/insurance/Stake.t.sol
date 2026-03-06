@@ -631,7 +631,7 @@ contract StakeTest is Test {
         assertEq(stake.sync(users[1]), 0);
         assertApproxEqAbs(stake.rewards(users[0]), rate * DUR / 2, 1e7);
         assertEq(stake.rewards(users[1]), 0);
-        assertEq(stake.keep(), (stake.rate() - rate) * DUR/2);
+        assertEq(stake.keep(), (stake.rate() - rate) * DUR / 2);
 
         vm.warp(stake.exp());
         assertApproxEqAbs(stake.sync(users[0]), rate * DUR / 2, 1e7);

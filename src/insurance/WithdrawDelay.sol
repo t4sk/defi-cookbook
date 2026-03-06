@@ -7,7 +7,6 @@ import {IStake} from "./lib/IStake.sol";
 import {Auth} from "./lib/Auth.sol";
 
 contract WithdrawDelay is Auth {
-    // TODO: gas golf
     using SafeTransfer for IERC20;
 
     event Queue(address indexed usr, uint256 i, uint256 amt);

@@ -6,7 +6,6 @@ import {DepositDelay} from "./DepositDelay.sol";
 import {WithdrawDelay} from "./WithdrawDelay.sol";
 import {Stop} from "./Stop.sol";
 
-// TODO: events
 contract Factory {
     event Create(
         address indexed insuree,
@@ -25,7 +24,12 @@ contract Factory {
         uint256 delay,
         uint256 epoch
     ) external returns (address, address, address, address) {
-        // TODO: input validations
+        require(token != address(0), "token = 0");
+        require(insuree != address(0), "insuree = 0");
+        require(dur > 0, "dur = 0");
+        require(dust / dur > 0, "dust / dur = 0");
+        require(epoch > 0, "epoch = 0");
+
         Stake stake = new Stake(token, dur, insuree, dust);
         DepositDelay deposit = new DepositDelay(address(stake), delay);
         WithdrawDelay withdraw = new WithdrawDelay(address(stake), epoch);

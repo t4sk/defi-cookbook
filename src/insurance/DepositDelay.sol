@@ -6,7 +6,6 @@ import {SafeTransfer} from "../lib/SafeTransfer.sol";
 import {IStake} from "./lib/IStake.sol";
 import {Auth} from "./lib/Auth.sol";
 
-// TODO: gas golf
 contract DepositDelay is Auth {
     using SafeTransfer for IERC20;
 
