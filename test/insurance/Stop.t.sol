@@ -153,6 +153,12 @@ contract StopTest is Test {
         assertEq(with.keep(), DUST);
     }
 
+    function test_refill_not_exit() public {
+        stop.stop();
+        vm.expectRevert("not exit");
+        stop.refill();
+    }
+
     function test_refill_not_auth() public {
         stop.stop();
         stake.settle(Stake.State.Exit);

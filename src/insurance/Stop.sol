@@ -39,6 +39,8 @@ contract Stop is Auth {
     }
 
     function refill() external auth {
+        // 3 = State.Exit
+        require(stake.state() == 3, "not exit");
         uint256 bal = token.balanceOf(address(this));
         require(bal >= withdrawDelay.dumped());
         withdrawDelay.refill();

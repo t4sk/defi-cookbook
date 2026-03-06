@@ -34,6 +34,7 @@ contract WithdrawDelay is Auth {
     uint256 public last;
     // Total queued amounts in the last 2 epoch
     uint256[2] public buckets;
+    // Total amount dumped
     uint256 public dumped;
     bool public stopped;
 
