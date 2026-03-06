@@ -138,7 +138,7 @@ contract Stake is Auth {
         //     c = total rewards in this cycle
         //     dt = delta time since last update
         // If tot <= c for the full duration
-        // insuree is better off not paying for an insurance
+        // insuree is better off not paying an insurance
         // So ensure total rewards paid <= tot
         // by setting r = tot / dur
         // r * dt <= c / dur * dt
