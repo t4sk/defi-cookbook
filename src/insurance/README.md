@@ -1,3 +1,0 @@
-- Stake
-  - Rewards streamed to stakers capped at total staked
-  - Don't deposit or withdraw with `usr = address(this)`

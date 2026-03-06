@@ -589,18 +589,79 @@ contract StakeTest is Test {
         assertEq(stake.calc(users[1]), 0);
     }
 
-    // TODO: test sync
+    function test_sync() public {
+        uint256 amt = stake.topped();
+        token.mint(address(this), amt);
+        stake.deposit(users[0], amt);
 
-    // sync
-    // - address(0)
-    // - address(this)
-    // - staker
-    // - not staker
-    // - before exp, after exp
-    // - next rate
+        assertEq(stake.sync(users[0]), 0);
+        assertEq(stake.sync(users[1]), 0);
+        assertEq(stake.rewards(users[0]), 0);
+        assertEq(stake.rewards(users[1]), 0);
 
-    // TODO: integration - fuzz + sim
-    // TODO: invariants
-    // - cannot earn rewards beyond exp
-    // - Emissions in any single sync interval never exceed total staked.
+        vm.warp(stake.exp() - DUR / 2);
+        assertApproxEqAbs(stake.sync(users[0]), stake.topped() / 2, 1e7);
+        assertEq(stake.sync(users[1]), 0);
+        // Call again
+        assertEq(stake.sync(users[0]), 0);
+        assertEq(stake.sync(users[1]), 0);
+        assertApproxEqAbs(stake.rewards(users[0]), stake.topped() / 2, 1e7);
+        assertEq(stake.rewards(users[1]), 0);
+
+        vm.warp(stake.exp());
+        assertApproxEqAbs(stake.sync(users[0]), stake.topped() / 2, 1e7);
+        assertEq(stake.sync(users[1]), 0);
+        assertApproxEqAbs(stake.rewards(users[0]), stake.topped(), 1e7);
+        assertEq(stake.rewards(users[1]), 0);
+    }
+
+    function test_sync_cap() public {
+        uint256 amt = stake.topped() / 2;
+        uint256 rate = amt / DUR;
+        token.mint(address(this), amt);
+        stake.deposit(users[0], amt);
+
+        assertEq(stake.sync(users[0]), 0);
+        assertEq(stake.sync(users[1]), 0);
+        assertEq(stake.rewards(users[0]), 0);
+        assertEq(stake.rewards(users[1]), 0);
+
+        vm.warp(stake.exp() - DUR / 2);
+        assertApproxEqAbs(stake.sync(users[0]), rate * DUR / 2, 1e7);
+        assertEq(stake.sync(users[1]), 0);
+        assertApproxEqAbs(stake.rewards(users[0]), rate * DUR / 2, 1e7);
+        assertEq(stake.rewards(users[1]), 0);
+        assertEq(stake.keep(), (stake.rate() - rate) * DUR/2);
+
+        vm.warp(stake.exp());
+        assertApproxEqAbs(stake.sync(users[0]), rate * DUR / 2, 1e7);
+        assertEq(stake.sync(users[1]), 0);
+        assertApproxEqAbs(stake.rewards(users[0]), rate * DUR, 1e7);
+        assertEq(stake.rewards(users[1]), 0);
+        assertEq(stake.keep(), (stake.rate() - rate) * DUR);
+    }
+
+    function test_sync_next() public {
+        uint256 amt = stake.topped();
+        token.mint(address(this), amt);
+        stake.deposit(users[0], amt);
+
+        vm.warp(stake.exp() - DUR / 2 + 1);
+
+        uint256 r0 = stake.rate();
+        uint256 r1 = 100;
+        vm.prank(INSUREE);
+        stake.roll(r1);
+
+        assertApproxEqAbs(stake.sync(users[0]), r0 * (DUR / 2 + 1), 1e7);
+
+        vm.warp(stake.next());
+        assertApproxEqAbs(stake.sync(users[0]), r0 * (DUR / 2 - 1), 1e7);
+        assertEq(stake.rate(), r1);
+        assertEq(stake.next(), 0);
+        assertEq(stake.nextRate(), 0);
+
+        vm.warp(stake.exp());
+        assertApproxEqAbs(stake.sync(users[0]), r1 * DUR, 1e7);
+    }
 }
