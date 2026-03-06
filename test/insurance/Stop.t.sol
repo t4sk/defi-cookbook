@@ -70,7 +70,7 @@ contract StopTest is Test {
 
         assertEq(token.balanceOf(address(stop)), bal);
         assertTrue(stake.stopped());
-        assertTrue(with.dumped());
+        assertTrue(with.stopped());
     }
 
     function test_stop_not_auth() public {
@@ -83,5 +83,81 @@ contract StopTest is Test {
         stop.stop();
         vm.expectRevert();
         stop.stop();
+    }
+
+    function test_cover() public {
+        // Deposit and queue withdraw
+        vm.prank(users[0]);
+        uint256 i = dep.queue(10 * DUST);
+        skip(DELAY);
+        vm.prank(users[0]);
+        dep.deposit(i);
+
+        skip(DUR / 4);
+
+        vm.prank(users[0]);
+        with.queue(DUST);
+
+        // Stop dumps tokens to stop contract
+        stop.stop();
+        stake.settle(Stake.State.Cover);
+
+        uint256 balBefore = token.balanceOf(INSUREE);
+        stop.cover(INSUREE);
+        uint256 balAfter = token.balanceOf(INSUREE);
+
+        assertGt(balAfter, balBefore);
+        assertEq(stake.total(), 0);
+    }
+
+    function test_cover_dst_zero() public {
+        stop.stop();
+        stake.settle(Stake.State.Cover);
+        vm.expectRevert("dst = 0");
+        stop.cover(address(0));
+    }
+
+    function test_cover_not_auth() public {
+        stop.stop();
+        stake.settle(Stake.State.Cover);
+        vm.expectRevert();
+        vm.prank(users[0]);
+        stop.cover(INSUREE);
+    }
+
+    function test_refill() public {
+        // Deposit and queue withdraw
+        vm.prank(users[0]);
+        uint256 i = dep.queue(10 * DUST);
+        skip(DELAY);
+        vm.prank(users[0]);
+        dep.deposit(i);
+
+        skip(DUR / 4);
+
+        vm.prank(users[0]);
+        with.queue(DUST);
+
+        // Stop dumps tokens to stop contract
+        stop.stop();
+        uint256 dumped = with.dumped();
+        assertGt(dumped, 0);
+
+        // Settle as Exit
+        stake.settle(Stake.State.Exit);
+
+        // Refill returns dumped tokens to WithdrawDelay
+        stop.refill();
+
+        assertEq(with.dumped(), 0);
+        assertEq(with.keep(), DUST);
+    }
+
+    function test_refill_not_auth() public {
+        stop.stop();
+        stake.settle(Stake.State.Exit);
+        vm.expectRevert();
+        vm.prank(users[0]);
+        stop.refill();
     }
 }

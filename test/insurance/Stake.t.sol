@@ -426,7 +426,7 @@ contract StakeTest is Test {
     function test_cover() public {
         stake.stop();
         stake.settle(Stake.State.Cover);
-        stake.cover(COVER, 0, INSUREE);
+        stake.cover(INSUREE, 0);
         assertEq(stake.total(), 0);
     }
 
@@ -435,12 +435,12 @@ contract StakeTest is Test {
         stake.settle(Stake.State.Cover);
         vm.expectRevert("not auth");
         vm.prank(users[0]);
-        stake.cover(COVER, 0, INSUREE);
+        stake.cover(INSUREE, 0);
     }
 
     function test_cover_not_cover() public {
         vm.expectRevert("invalid state");
-        stake.cover(COVER, 0, INSUREE);
+        stake.cover(INSUREE, 0);
     }
 
     function test_exit() public {

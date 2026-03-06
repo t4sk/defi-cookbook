@@ -125,7 +125,7 @@ contract WithdrawDelay is Auth {
     function refill() external auth {
         require(stopped, "not stopped");
         if (dumped > 0) {
-            token.safeTransferFrom(msg.sender, dumped);
+            token.safeTransferFrom(msg.sender, address(this), dumped);
             keep += dumped;
             dumped = 0;
         }

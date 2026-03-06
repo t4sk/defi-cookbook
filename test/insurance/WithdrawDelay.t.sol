@@ -52,7 +52,8 @@ contract WithdrawDelayTest is Test {
         assertEq(address(with.stake()), address(stake));
         assertEq(with.EPOCH(), EPOCH);
         assertEq(with.keep(), 0);
-        assertEq(with.dumped(), false);
+        assertEq(with.dumped(), 0);
+        assertEq(with.stopped(), false);
     }
 
     function test_queue() public {
@@ -71,9 +72,9 @@ contract WithdrawDelayTest is Test {
         assertEq(lockExp, curr + 2 * EPOCH);
     }
 
-    function test_queue_dumped() public {
+    function test_queue_stopped() public {
         with.dump();
-        vm.expectRevert("dumped");
+        vm.expectRevert("stopped");
         vm.prank(users[0]);
         with.queue(DUST);
     }
@@ -125,7 +126,7 @@ contract WithdrawDelayTest is Test {
         vm.prank(usr);
         uint256 i = with.queue(DUST);
 
-        skip(2 * EPOCH - 1);
+        skip(EPOCH);
 
         vm.expectRevert("lock not expired");
         vm.prank(usr);
@@ -170,9 +171,14 @@ contract WithdrawDelayTest is Test {
         vm.prank(usr);
         uint256 i = with.queue(DUST);
 
-        skip(2 * EPOCH);
+        // Dump before lock expires
+        skip(EPOCH);
         with.dump();
 
+        // Wait for lock to expire
+        skip(EPOCH);
+
+        // lock.exp > dump's last epoch AND dumped > 0 => reverts
         vm.expectRevert("dumped");
         vm.prank(usr);
         with.unlock(i);
@@ -187,14 +193,16 @@ contract WithdrawDelayTest is Test {
         uint256 amt = with.dump();
 
         assertEq(amt, 5 * DUST);
-        assertTrue(with.dumped());
+        assertTrue(with.stopped());
+        assertEq(with.dumped(), 5 * DUST);
         assertEq(with.keep(), 0);
     }
 
     function test_dump_no_pending() public {
         uint256 amt = with.dump();
         assertEq(amt, 0);
-        assertTrue(with.dumped());
+        assertTrue(with.stopped());
+        assertEq(with.dumped(), 0);
     }
 
     function test_dump_buckets_shift() public {
@@ -228,8 +236,76 @@ contract WithdrawDelayTest is Test {
 
     function test_dump_twice() public {
         with.dump();
-        vm.expectRevert("dumped");
+        vm.expectRevert("stopped");
         with.dump();
+    }
+
+    function test_refill() public {
+        vm.prank(users[0]);
+        with.queue(3 * DUST);
+        vm.prank(users[1]);
+        with.queue(2 * DUST);
+
+        uint256 amt = with.dump();
+        assertEq(amt, 5 * DUST);
+        assertEq(with.dumped(), 5 * DUST);
+        assertEq(with.keep(), 0);
+
+        // Refill
+        token.mint(address(this), 5 * DUST);
+        token.approve(address(with), 5 * DUST);
+        with.refill();
+
+        assertEq(with.dumped(), 0);
+        assertEq(with.keep(), 5 * DUST);
+    }
+
+    function test_refill_no_dumped() public {
+        with.dump();
+        assertEq(with.dumped(), 0);
+
+        // Refill with 0 dumped is a no-op
+        with.refill();
+        assertEq(with.dumped(), 0);
+        assertEq(with.keep(), 0);
+    }
+
+    function test_refill_not_stopped() public {
+        vm.expectRevert("not stopped");
+        with.refill();
+    }
+
+    function test_refill_not_auth() public {
+        with.dump();
+        vm.expectRevert();
+        vm.prank(users[0]);
+        with.refill();
+    }
+
+    function test_unlock_after_refill() public {
+        address usr = users[0];
+        vm.prank(usr);
+        uint256 i = with.queue(DUST);
+
+        // Dump before lock expires
+        skip(EPOCH);
+        with.dump();
+        assertGt(with.dumped(), 0);
+
+        // Refill
+        token.mint(address(this), DUST);
+        token.approve(address(with), DUST);
+        with.refill();
+        assertEq(with.dumped(), 0);
+
+        // Wait for lock to expire
+        skip(EPOCH);
+
+        // After refill, dumped == 0 so unlock succeeds
+        uint256 balBefore = token.balanceOf(usr);
+        vm.prank(usr);
+        with.unlock(i);
+        assertEq(token.balanceOf(usr), balBefore + DUST);
     }
 
     function test_recover() public {

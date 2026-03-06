@@ -9,6 +9,7 @@ import {Auth} from "./lib/Auth.sol";
 contract Stop is Auth {
     event Stop();
     event Cover(address dst, uint256 amt);
+    event Refill();
 
     IERC20 public immutable token;
     IStake public immutable stake;
@@ -34,11 +35,13 @@ contract Stop is Auth {
         require(dst != address(0), "dst = 0");
         uint256 bal = token.balanceOf(address(this));
         stake.cover(dst, bal);
+        emit Cover(dst, bal);
     }
 
     function refill() external auth {
         uint256 bal = token.balanceOf(address(this));
         require(bal >= withdrawDelay.dumped());
         withdrawDelay.refill();
+        emit Refill();
     }
 }
