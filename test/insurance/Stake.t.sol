@@ -510,7 +510,33 @@ contract StakeTest is Test {
         stake.recover(address(token));
     }
 
-    // TODO: test pot
+    function test_pot() public {
+        assertEq(stake.pot(), stake.topped());
+
+        vm.warp(stake.exp() - DUR / 2);
+        assertApproxEqAbs(stake.pot(), stake.topped() / 2, 1);
+
+        vm.warp(stake.exp());
+        assertEq(stake.pot(), 0);
+    }
+
+    function test_pot_next() public {
+        vm.warp(stake.exp() - DUR / 2 + 1);
+
+        uint256 t0 = stake.topped();
+        uint256 r = 100;
+        vm.prank(INSUREE);
+        stake.roll(r);
+
+        assertApproxEqAbs(stake.pot(), t0 / DUR * (DUR / 2 - 1) + r * DUR, 1);
+
+        vm.warp(stake.exp() - DUR / 2);
+        assertApproxEqAbs(stake.pot(), r * DUR / 2, 1);
+
+        vm.warp(stake.exp());
+        assertEq(stake.pot(), 0);
+    }
+
     // TODO: test calc
     // TODO: test sync
 

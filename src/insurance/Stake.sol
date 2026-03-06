@@ -6,8 +6,6 @@ import {SafeTransfer} from "../lib/SafeTransfer.sol";
 import {Math} from "../lib/Math.sol";
 import {Auth} from "./lib/Auth.sol";
 
-// TODO: gas golf
-
 contract Stake is Auth {
     using SafeTransfer for IERC20;
 
