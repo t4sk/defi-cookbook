@@ -86,6 +86,10 @@ contract Stake is Auth {
         insuree = _insuree;
         dust = _dust;
 
+        // TODO: remove?
+        // Ensures reward rate when total < rate * dur is > 0
+        require(dust / dur > 0, "dust / dur = 0");
+
         // Insuree can claim rewards while no one staked
         // Some calculations are done with total + 1 to account for this share
         shares[address(this)] = 1;
@@ -117,8 +121,7 @@ contract Stake is Auth {
         uint256 t = Math.min(block.timestamp, exp);
         uint256 a = acc;
         uint256 tot = total;
-        // Rate capped at total staked / dur
-        uint256 cap = t > last ? tot / (t - last) : type(uint256).max;
+        uint256 cap = tot / dur;
         if (next > 0 && next <= t) {
             a += Math.min(rate, cap) * (next - last) * R / (tot + 1);
             a += Math.min(nextRate, cap) * (t - next) * R / (tot + 1);
@@ -134,10 +137,16 @@ contract Stake is Auth {
         uint256 t = Math.min(block.timestamp, exp);
         uint256 a = acc;
         uint256 tot = total;
-        // Rewards streamed to stakers capped at total staked
-        // Rate capped at total staked / dt
-        // cap * dt <= total
-        uint256 cap = t > last ? tot / (t - last) : type(uint256).max;
+        // Let r = rate to pay
+        //     c = total rewards in this cycle
+        //     dt = delta time since last update
+        // If tot <= c for the full duration
+        // insuree is better off not paying for an insurance
+        // So ensure total rewards paid <= tot
+        // by setting r = tot / dur
+        // r * dt <= c / dur * dt
+        // sum(r * dt) = tot <= sum(c / dur * dt) = c
+        uint256 cap = tot / dur;
         // Save excess for insuree
         uint256 saved = 0;
 

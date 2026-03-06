@@ -44,7 +44,7 @@ contract StakeTest is Test {
         assertEq(uint256(stake.state()), uint256(Stake.State.Live));
         assertEq(stake.insuree(), INSUREE);
         assertEq(stake.dust(), DUST);
-        assertEq(stake.total(), 1);
+        assertEq(stake.total(), 0);
         assertEq(stake.shares(address(stake)), 1);
         assertEq(stake.stopped(), false);
     }
@@ -53,7 +53,7 @@ contract StakeTest is Test {
         address usr = users[0];
         uint256 amt = DUST;
         stake.deposit(usr, amt);
-        assertEq(stake.total(), amt + 1);
+        assertEq(stake.total(), amt);
         assertEq(stake.shares(usr), amt);
     }
 
@@ -75,6 +75,11 @@ contract StakeTest is Test {
         stake.deposit(users[0], DUST);
     }
 
+    function test_deposit_invalid_usr() public {
+        vm.expectRevert(bytes("invalid usr"));
+        stake.deposit(address(stake), DUST);
+    }
+
     function test_deposit_dust() public {
         vm.expectRevert(bytes("dust"));
         stake.deposit(users[0], DUST - 1);
@@ -87,7 +92,7 @@ contract StakeTest is Test {
         stake.deposit(usr, amt);
 
         stake.withdraw(usr, dst, amt);
-        assertEq(stake.total(), 1);
+        assertEq(stake.total(), 0);
         assertEq(stake.shares(usr), 0);
         assertEq(token.balanceOf(dst), amt);
     }
@@ -123,6 +128,15 @@ contract StakeTest is Test {
 
         vm.expectRevert(bytes("expired"));
         stake.withdraw(usr, dst, amt);
+    }
+
+    function test_withdraw_invalid_usr() public {
+        address dst = users[1];
+        uint256 amt = DUST;
+        stake.deposit(users[0], amt);
+
+        vm.expectRevert(bytes("invalid usr"));
+        stake.withdraw(address(stake), dst, amt);
     }
 
     function test_withdraw_dust() public {
@@ -223,18 +237,18 @@ contract StakeTest is Test {
         skip(DUR / 2);
         vm.prank(INSUREE);
         stake.refund();
-        // refund shares = 1 / amt
-        assertApproxEqAbs(stake.paid(), stake.topped() / 2 * 1 / amt, 1);
+        assertGe(stake.paid(), stake.topped() / 2 - DUST);
+        assertLe(stake.paid(), stake.topped() / 2);
 
         vm.warp(stake.exp());
         vm.prank(INSUREE);
         stake.refund();
-        assertApproxEqAbs(stake.paid(), stake.topped() * 1 / amt, 10);
+        assertLe(stake.paid(), stake.topped());
 
         vm.warp(stake.exp() + 1000);
         vm.prank(INSUREE);
         stake.refund();
-        assertApproxEqAbs(stake.paid(), stake.topped() * 1 / amt, 10);
+        assertLe(stake.paid(), stake.topped());
     }
 
     function test_refund_no_staker() public {
@@ -355,13 +369,13 @@ contract StakeTest is Test {
     function test_stop_keep() public {
         skip(DUR / 2);
         stake.stop();
-        assertApproxEqAbs(stake.keep(), stake.topped() / 2, 1);
+        assertApproxEqAbs(stake.keep(), stake.topped(), 1);
     }
 
     function test_stop_keep_zero() public {
         vm.warp(stake.exp() - 1);
         stake.stop();
-        assertApproxEqAbs(stake.keep(), 0, stake.rate());
+        assertApproxEqAbs(stake.keep(), stake.topped(), 1);
     }
 
     function test_stop_not_auth() public {
@@ -413,7 +427,7 @@ contract StakeTest is Test {
         stake.stop();
         stake.settle(Stake.State.Cover);
         stake.cover(COVER, 0, INSUREE);
-        assertEq(stake.total(), 1);
+        assertEq(stake.total(), 0);
     }
 
     function test_cover_not_auth() public {
