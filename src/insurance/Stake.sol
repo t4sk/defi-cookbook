@@ -304,15 +304,11 @@ contract Stake is Auth {
     }
 
     // Pay insuree
-    function cover(address src, uint256 amt, address dst)
-        external
-        auth
-        returns (uint256)
-    {
+    function cover(address dst, uint256 amt) external auth returns (uint256) {
         require(state == State.Cover, "invalid state");
 
         if (amt > 0) {
-            token.safeTransferFrom(src, address(this), amt);
+            token.safeTransferFrom(msg.sender, address(this), amt);
         }
 
         amt += total;

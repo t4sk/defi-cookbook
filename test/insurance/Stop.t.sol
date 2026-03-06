@@ -29,20 +29,17 @@ contract StopTest is Test {
         with = new WithdrawDelay(address(stake), EPOCH);
         stop = new StopContract(address(stake), address(with));
 
-        // Auth
         stake.allow(address(dep));
         stake.allow(address(with));
         stake.allow(address(stop));
         with.allow(address(stop));
 
-        // Fund and approve for inc
         token.mint(INSUREE, 1e18 * DUR);
         vm.prank(INSUREE);
         token.approve(address(stake), type(uint256).max);
         vm.prank(INSUREE);
         stake.inc(1e18 * DUR);
 
-        // Fund users
         for (uint256 i = 0; i < users.length; i++) {
             token.mint(users[i], 100 * 1e18);
             vm.prank(users[i]);

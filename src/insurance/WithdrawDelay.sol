@@ -34,7 +34,8 @@ contract WithdrawDelay is Auth {
     uint256 public last;
     // Total queued amounts in the last 2 epoch
     uint256[2] public buckets;
-    bool public dumped;
+    uint256 public dumped;
+    bool public stopped;
 
     constructor(address _stake, uint256 _epoch) {
         stake = IStake(_stake);
@@ -44,7 +45,7 @@ contract WithdrawDelay is Auth {
     }
 
     function queue(uint256 amt) external returns (uint256) {
-        require(!dumped, "dumped");
+        require(!stopped, "stopped");
 
         stake.withdraw(msg.sender, address(this), amt);
         keep += amt;
@@ -81,8 +82,9 @@ contract WithdrawDelay is Auth {
         Lock storage lock = locks[msg.sender][i];
         require(lock.amt > 0, "lock amt = 0");
         require(lock.exp <= block.timestamp, "lock not expired");
-        if (dumped) {
-            require(lock.exp <= last, "dumped");
+        if (stopped) {
+            // Lock expired before dump, dump = 0 or refill was called
+            require(lock.exp <= last || dumped == 0, "dumped");
         }
 
         uint256 amt = lock.amt;
@@ -94,8 +96,9 @@ contract WithdrawDelay is Auth {
         emit Unlock(msg.sender, i, amt);
     }
 
-    function dump() external auth returns (uint256) {
-        require(!dumped, "dumped");
+    function dump() external auth returns (uint256 amt) {
+        require(!stopped, "stopped");
+        stopped = true;
 
         uint256 curr = (block.timestamp / EPOCH) * EPOCH;
 
@@ -108,17 +111,24 @@ contract WithdrawDelay is Auth {
         }
 
         last = curr;
-        dumped = true;
+        amt = buckets[0] + buckets[1];
 
-        uint256 amt = buckets[0] + buckets[1];
         if (amt > 0) {
+            dumped = amt;
             keep -= amt;
             token.safeTransfer(msg.sender, amt);
         }
 
         emit Dump(amt);
+    }
 
-        return amt;
+    function refill() external auth {
+        require(stopped, "not stopped");
+        if (dumped > 0) {
+            token.safeTransferFrom(msg.sender, dumped);
+            keep += dumped;
+            dumped = 0;
+        }
     }
 
     function recover(address _token) external auth {

@@ -22,17 +22,14 @@ contract DepositDelayTest is Test {
         stake = new Stake(address(token), DUR, INSUREE, DUST);
         dep = new DepositDelay(address(stake), DELAY);
 
-        // Allow deposit delay to call stake.deposit
         stake.allow(address(dep));
 
-        // Fund and approve for inc
         token.mint(INSUREE, 1e18 * DUR);
         vm.prank(INSUREE);
         token.approve(address(stake), type(uint256).max);
         vm.prank(INSUREE);
         stake.inc(1e18 * DUR);
 
-        // Fund users
         for (uint256 i = 0; i < users.length; i++) {
             token.mint(users[i], 100 * 1e18);
             vm.prank(users[i]);
@@ -206,7 +203,6 @@ contract DepositDelayTest is Test {
     }
 
     function test_recover() public {
-        // Send extra tokens to dep
         token.mint(address(dep), 5 * 1e18);
 
         vm.prank(users[0]);

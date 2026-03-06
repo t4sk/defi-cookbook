@@ -7,4 +7,5 @@ interface IStake {
     function deposit(address usr, uint256 amt) external;
     function withdraw(address usr, address dst, uint256 amt) external;
     function stop() external;
+    function cover(address dst, uint256 amt) external returns (uint256 amt);
 }

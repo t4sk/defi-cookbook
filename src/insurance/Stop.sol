@@ -8,6 +8,7 @@ import {Auth} from "./lib/Auth.sol";
 
 contract Stop is Auth {
     event Stop();
+    event Cover(address dst, uint256 amt);
 
     IERC20 public immutable token;
     IStake public immutable stake;
@@ -17,12 +18,27 @@ contract Stop is Auth {
         stake = IStake(_stake);
         token = IERC20(stake.token());
         withdrawDelay = IWithdrawDelay(_withdrawDelay);
+        // Transfer when cover() is called
         token.approve(address(stake), type(uint256).max);
+        // Transfer when refill() is called
+        token.approve(address(withdrawDelay), type(uint256).max);
     }
 
     function stop() external auth {
         withdrawDelay.dump();
         stake.stop();
         emit Stop();
+    }
+
+    function cover(address dst) external auth {
+        require(dst != address(0), "dst = 0");
+        uint256 bal = token.balanceOf(address(this));
+        stake.cover(dst, bal);
+    }
+
+    function refill() external auth {
+        uint256 bal = token.balanceOf(address(this));
+        require(bal >= withdrawDelay.dumped());
+        withdrawDelay.refill();
     }
 }
