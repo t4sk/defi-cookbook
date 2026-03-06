@@ -86,7 +86,6 @@ contract Stake is Auth {
         insuree = _insuree;
         dust = _dust;
 
-        // TODO: remove?
         // Ensures reward rate when total < rate * dur is > 0
         require(dust / dur > 0, "dust / dur = 0");
 
@@ -205,6 +204,7 @@ contract Stake is Auth {
         emit Withdraw(usr, amt);
     }
 
+    // Claim rewards
     function take() public returns (uint256 amt) {
         sync(msg.sender);
         amt = rewards[msg.sender];
@@ -216,6 +216,7 @@ contract Stake is Auth {
         emit Take(msg.sender, amt);
     }
 
+    // Restake rewards
     function restake() external live returns (uint256 amt) {
         sync(msg.sender);
         amt = rewards[msg.sender];
@@ -229,6 +230,7 @@ contract Stake is Auth {
         emit Restake(msg.sender, amt);
     }
 
+    // Refund to insuree
     function refund() external returns (uint256 amt) {
         require(msg.sender == insuree, "not insuree");
 
@@ -251,6 +253,7 @@ contract Stake is Auth {
         emit Refund(msg.sender, amt);
     }
 
+    // Increase reward emission rate
     function inc(uint256 amt) external live {
         sync(address(0));
         token.safeTransferFrom(msg.sender, address(this), amt);
@@ -264,6 +267,7 @@ contract Stake is Auth {
         emit Inc(amt);
     }
 
+    // Extend insurance and schedule new rate
     function roll(uint256 r) external live {
         require(msg.sender == insuree, "not insuree");
         require(rate > 0, "rate = 0");
@@ -284,6 +288,7 @@ contract Stake is Auth {
         emit Roll(r);
     }
 
+    // Stop reward emissions
     function stop() external auth live {
         sync(address(0));
         keep += pot();
@@ -292,6 +297,7 @@ contract Stake is Auth {
         emit Stop();
     }
 
+    // Decide who to pay (insuree or stakers)
     function settle(State s) external auth {
         require(state == State.Stopped, "not stopped");
         require(s == State.Cover || s == State.Exit, "invalid next state");
@@ -299,6 +305,7 @@ contract Stake is Auth {
         emit Settle(uint256(s));
     }
 
+    // Pay insuree
     function cover(address src, uint256 amt, address dst)
         external
         auth
@@ -319,6 +326,7 @@ contract Stake is Auth {
         return amt;
     }
 
+    // Pay stakers
     function exit() external returns (uint256 amt) {
         // Expired without call to stop or settled
         if (state == State.Live) {
