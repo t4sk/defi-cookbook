@@ -87,7 +87,7 @@ contract Stake is Auth {
         uint256 _dust,
         uint256 _cov
     ) {
-        require(_cov >= 1 && cov <= 1000, "invalid cov");
+        require(_cov >= 1 && _cov <= 1000, "invalid cov");
         token = IERC20(_token);
         last = block.timestamp;
         exp = block.timestamp + _dur;
@@ -156,24 +156,24 @@ contract Stake is Auth {
         uint256 saved = 0;
 
         if (next > 0 && next <= t) {
-            uint256 c0 = cap(buckets[0], tot);
-            uint256 c1 = cap(buckets[1], tot);
-            uint256 dt0 = next - last;
-            uint256 dt1 = t - next;
-            a += c0 * rate * dt0 / (tot + 1);
-            a += c1 * nextRate * dt1 / (tot + 1);
-            saved = (R - c0) * rate * dt0 / R + (R - c1) * nextRate * dt1 / R;
+            uint256 c = cap(buckets[0], tot);
+            uint256 dt = next - last;
+            a += c * rate * dt / (tot + 1);
+            saved = (R - c) * rate * dt / R;
+
+            last = next;
             rate = nextRate;
             nextRate = 0;
             next = 0;
             buckets[0] = buckets[1];
             buckets[1] = 0;
-        } else {
-            uint256 c = cap(buckets[0], tot);
-            uint256 dt = t - last;
-            a += c * rate * dt / (tot + 1);
-            saved = (R - c) * rate * dt / R;
         }
+
+        uint256 c = cap(buckets[0], tot);
+        uint256 dt = t - last;
+        a += c * rate * dt / (tot + 1);
+        saved += (R - c) * rate * dt / R;
+
         acc = a;
         last = t;
 
