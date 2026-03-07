@@ -22,12 +22,15 @@ contract Stake is Auth {
     event Exit(address indexed usr, uint256 amt);
 
     // Rate scale
-    uint256 private constant R = 1e18;
+    uint256 private constant R = 1e9;
     IERC20 public immutable token;
     // Reward duration
     uint256 public immutable dur;
     // Minimum amount to deposit and must remain in stake
     uint256 public immutable dust;
+    // Target coverage
+    // Pay rewards at max rate when total staked >= cov * buckets[0]
+    uint256 public immutable cov;
 
     enum State {
         Live,
@@ -68,6 +71,8 @@ contract Stake is Auth {
     uint256 public topped;
     // Total amount of rewards claimed (transferred out or restaked)
     uint256 public paid;
+    // TODO:
+    uint256[2] public buckets;
 
     modifier live() {
         require(state == State.Live, "not live");
@@ -75,7 +80,14 @@ contract Stake is Auth {
         _;
     }
 
-    constructor(address _token, uint256 _dur, address _insuree, uint256 _dust) {
+    constructor(
+        address _token,
+        uint256 _dur,
+        address _insuree,
+        uint256 _dust,
+        uint256 _cov
+    ) {
+        require(_cov >= 1 && cov <= 1000, "invalid cov");
         token = IERC20(_token);
         last = block.timestamp;
         exp = block.timestamp + _dur;
@@ -83,9 +95,7 @@ contract Stake is Auth {
         state = State.Live;
         insuree = _insuree;
         dust = _dust;
-
-        // Ensures reward rate when total < rate * dur is > 0
-        require(dust / dur > 0, "dust / dur = 0");
+        cov = _cov;
 
         // Insuree can claim rewards while no one staked
         // Some calculations are done with total + 1 to account for this share
@@ -112,18 +122,25 @@ contract Stake is Auth {
         }
     }
 
+    // Cap reward rate proportional to min(total / (cov * bucket), 1)
+    function cap(uint256 bucket, uint256 tot) private view returns (uint256) {
+        if (bucket == 0) {
+            return 0;
+        }
+        return tot < cov * bucket ? tot * R / (cov * bucket) : R;
+    }
+
     // Calculate claimable rewards of a user
     function calc(address usr) external view returns (uint256) {
         // Cap timestamp to exp
         uint256 t = Math.min(block.timestamp, exp);
         uint256 a = acc;
         uint256 tot = total;
-        uint256 cap = tot / dur;
         if (next > 0 && next <= t) {
-            a += Math.min(rate, cap) * (next - last) * R / (tot + 1);
-            a += Math.min(nextRate, cap) * (t - next) * R / (tot + 1);
+            a += cap(buckets[0], tot) * rate * (next - last) / (tot + 1);
+            a += cap(buckets[1], tot) * nextRate * (t - next) / (tot + 1);
         } else {
-            a += Math.min(rate, cap) * (t - last) * R / (tot + 1);
+            a += cap(buckets[0], tot) * rate * (t - last) / (tot + 1);
         }
         return rewards[usr] + shares[usr] * (a - accs[usr]) / R;
     }
@@ -134,35 +151,27 @@ contract Stake is Auth {
         uint256 t = Math.min(block.timestamp, exp);
         uint256 a = acc;
         uint256 tot = total;
-        // Let r = rate to pay
-        //     c = total rewards in this cycle
-        //     dt = delta time since last update
-        // If tot <= c for the full duration
-        // insuree is better off not paying an insurance
-        // So ensure total rewards paid <= tot
-        // by setting r = tot / dur
-        // r * dt <= c / dur * dt
-        // sum(r * dt) = tot <= sum(c / dur * dt) = c
-        uint256 cap = tot / dur;
         // Save excess for insuree
         uint256 saved = 0;
 
         if (next > 0 && next <= t) {
-            uint256 r = Math.min(rate, cap);
-            uint256 nr = Math.min(nextRate, cap);
+            uint256 c0 = cap(buckets[0], tot);
+            uint256 c1 = cap(buckets[1], tot);
             uint256 dt0 = next - last;
             uint256 dt1 = t - next;
-            a += r * dt0 * R / (tot + 1);
-            a += nr * dt1 * R / (tot + 1);
-            saved = (rate - r) * dt0 + (nextRate - nr) * dt1;
+            a += c0 * rate * dt0 / (tot + 1);
+            a += c1 * nextRate * dt1 / (tot + 1);
+            saved = (R - c0) * rate * dt0 / R + (R - c1) * nextRate * dt1 / R;
             rate = nextRate;
             nextRate = 0;
             next = 0;
+            buckets[0] = buckets[1];
+            buckets[1] = 0;
         } else {
-            uint256 r = Math.min(rate, cap);
+            uint256 c = cap(buckets[0], tot);
             uint256 dt = t - last;
-            a += r * dt * R / (tot + 1);
-            saved = (rate - r) * dt;
+            a += c * rate * dt / (tot + 1);
+            saved = (R - c) * rate * dt / R;
         }
         acc = a;
         last = t;
@@ -178,14 +187,13 @@ contract Stake is Auth {
         }
     }
 
-    function deposit(address usr, uint256 amt) external auth live {
-        require(usr != address(this), "invalid usr");
+    function deposit(uint256 amt) external live {
         require(amt >= dust, "dust");
         token.safeTransferFrom(msg.sender, address(this), amt);
-        sync(usr);
+        sync(msg.sender);
         total += amt;
-        shares[usr] += amt;
-        emit Deposit(usr, amt);
+        shares[msg.sender] += amt;
+        emit Deposit(msg.sender, amt);
     }
 
     function withdraw(address usr, address dst, uint256 amt)
@@ -261,6 +269,7 @@ contract Stake is Auth {
         require(delta > 0, "delta rate = 0");
         rate += delta;
         topped += amt;
+        buckets[0] += amt;
 
         emit Inc(amt);
     }
@@ -275,8 +284,10 @@ contract Stake is Auth {
 
         sync(address(0));
         if (r > 0) {
-            token.safeTransferFrom(msg.sender, address(this), r * dur);
-            topped += r * dur;
+            uint256 amt = r * dur;
+            token.safeTransferFrom(msg.sender, address(this), amt);
+            topped += amt;
+            buckets[1] += amt;
         }
 
         nextRate = r;

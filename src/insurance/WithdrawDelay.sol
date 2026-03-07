@@ -115,21 +115,30 @@ contract WithdrawDelay is Auth {
         amt = buckets[0] + buckets[1];
 
         if (amt > 0) {
+            buckets[0] = 0;
+            buckets[1] = 0;
             dumped = amt;
-            keep -= amt;
-            token.safeTransfer(msg.sender, amt);
         }
+
+        stake.stop();
 
         emit Dump(amt);
     }
 
+    function cover(address dst) external auth {
+        require(stopped, "not stopped");
+        require(stake.state() == 2, "invalid state");
+        uint256 amt = dumped;
+        keep -= amt;
+        dumped = 0;
+        token.approve(address(stake), amt);
+        stake.cover(dst, amt);
+    }
+
     function refill() external auth {
         require(stopped, "not stopped");
-        if (dumped > 0) {
-            token.safeTransferFrom(msg.sender, address(this), dumped);
-            keep += dumped;
-            dumped = 0;
-        }
+        require(stake.state() == 3, "invalid state");
+        dumped = 0;
     }
 
     function recover(address _token) external auth {
