@@ -122,6 +122,7 @@ contract Stake is Auth {
         }
     }
 
+    // TODO: comment
     // Cap reward rate proportional to min(total / (cov * bucket), 1)
     function cap(uint256 bucket, uint256 tot) private view returns (uint256) {
         if (bucket == 0) {
