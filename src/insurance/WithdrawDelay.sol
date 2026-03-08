@@ -131,7 +131,9 @@ contract WithdrawDelay is Auth {
         uint256 amt = dumped;
         keep -= amt;
         dumped = 0;
-        token.approve(address(stake), amt);
+        if (amt > 0) {
+            token.approve(address(stake), amt);
+        }
         stake.cover(dst, amt);
     }
 
