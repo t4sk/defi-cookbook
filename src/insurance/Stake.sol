@@ -29,7 +29,7 @@ contract Stake is Auth {
     // Minimum amount to deposit and must remain in stake
     uint256 public immutable dust;
     // Target coverage
-    // Pay rewards at max rate when total staked >= cov * buckets[0]
+    // Total rewards paid in a duration <= min(buckets[0], max total staked / cov)
     uint256 public immutable cov;
 
     enum State {
@@ -71,7 +71,7 @@ contract Stake is Auth {
     uint256 public topped;
     // Total amount of rewards claimed (transferred out or restaked)
     uint256 public paid;
-    // TODO:
+    // Total rewards allocated for current and next duration
     uint256[2] public buckets;
 
     modifier live() {
@@ -87,7 +87,6 @@ contract Stake is Auth {
         uint256 _dust,
         uint256 _cov
     ) {
-        require(_cov >= 1 && _cov <= 1000, "invalid cov");
         token = IERC20(_token);
         last = block.timestamp;
         exp = block.timestamp + _dur;
@@ -96,6 +95,10 @@ contract Stake is Auth {
         insuree = _insuree;
         dust = _dust;
         cov = _cov;
+
+        require(cov >= 1 && cov <= 1000, "invalid cov");
+        // Check cap > 0 when tot > 0
+        require(dust * R >= cov * dur, "dust < cov * dur");
 
         // Insuree can claim rewards while no one staked
         // Some calculations are done with total + 1 to account for this share
@@ -122,13 +125,16 @@ contract Stake is Auth {
         }
     }
 
-    // TODO: comment
-    // Cap reward rate proportional to min(total / (cov * bucket), 1)
-    function cap(uint256 bucket, uint256 tot) private view returns (uint256) {
-        if (bucket == 0) {
-            return 0;
-        }
-        return tot < cov * bucket ? tot * R / (cov * bucket) : R;
+    // Cap on rate.
+    // If total staked <= cov * bucket,
+    // then total rewards paid <= total staked / cov
+    // Let c = cap
+    // sum(c * dt) <= sum(r * dt) <= buckets[0]
+    // if total <= cov * buckets[0] for the whole duration
+    // total / cov / dur <= buckets[0] / dur <= rate, since rate always increases after inc()
+    // sum(c * dt) <= total / cov / dur * sum(dt) = total / cov
+    function cap(uint256 r, uint256 tot) private view returns (uint256) {
+        return Math.min(r * R, tot * R / (cov * dur));
     }
 
     // Calculate claimable rewards of a user
@@ -138,10 +144,10 @@ contract Stake is Auth {
         uint256 a = acc;
         uint256 tot = total;
         if (next > 0 && next <= t) {
-            a += cap(buckets[0], tot) * rate * (next - last) / (tot + 1);
-            a += cap(buckets[1], tot) * nextRate * (t - next) / (tot + 1);
+            a += cap(rate, tot) * (next - last) / (tot + 1);
+            a += cap(nextRate, tot) * (t - next) / (tot + 1);
         } else {
-            a += cap(buckets[0], tot) * rate * (t - last) / (tot + 1);
+            a += cap(rate, tot) * (t - last) / (tot + 1);
         }
         return rewards[usr] + shares[usr] * (a - accs[usr]) / R;
     }
@@ -156,10 +162,10 @@ contract Stake is Auth {
         uint256 saved = 0;
 
         if (next > 0 && next <= t) {
-            uint256 c = cap(buckets[0], tot);
+            uint256 c = cap(rate, tot);
             uint256 dt = next - last;
-            a += c * rate * dt / (tot + 1);
-            saved = (R - c) * rate * dt / R;
+            a += c * dt / (tot + 1);
+            saved += (rate * R - c) * dt / R;
 
             last = next;
             rate = nextRate;
@@ -169,10 +175,10 @@ contract Stake is Auth {
             buckets[1] = 0;
         }
 
-        uint256 c = cap(buckets[0], tot);
+        uint256 c = cap(rate, tot);
         uint256 dt = t - last;
-        a += c * rate * dt / (tot + 1);
-        saved += (R - c) * rate * dt / R;
+        a += c * dt / (tot + 1);
+        saved += (rate * R - c) * dt / R;
 
         acc = a;
         last = t;
