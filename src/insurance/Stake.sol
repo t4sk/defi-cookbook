@@ -158,10 +158,11 @@ contract Stake is Auth {
         uint256 saved = 0;
 
         if (next > 0 && next <= t) {
-            uint256 c = cap(rate, tot);
+            uint256 r = rate;
+            uint256 c = cap(r, tot);
             uint256 dt = next - last;
             a += c * dt / (tot + 1);
-            saved += (rate - c) * dt / R;
+            saved += (r - c) * dt / R;
 
             last = next;
             rate = nextRate;
@@ -171,10 +172,11 @@ contract Stake is Auth {
             buckets[1] = 0;
         }
 
-        uint256 c = cap(rate, tot);
+        uint256 r = rate;
+        uint256 c = cap(r, tot);
         uint256 dt = t - last;
         a += c * dt / (tot + 1);
-        saved += (rate - c) * dt / R;
+        saved += (r - c) * dt / R;
 
         acc = a;
         last = t;
