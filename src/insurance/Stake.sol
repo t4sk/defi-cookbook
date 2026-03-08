@@ -82,19 +82,19 @@ contract Stake is Auth {
 
     constructor(
         address _token,
-        uint256 _dur,
         address _insuree,
+        uint256 _dur,
         uint256 _dust,
         uint256 _cov
     ) {
         token = IERC20(_token);
-        last = block.timestamp;
-        exp = block.timestamp + _dur;
-        dur = _dur;
-        state = State.Live;
         insuree = _insuree;
+        dur = _dur;
         dust = _dust;
         cov = _cov;
+        state = State.Live;
+        last = block.timestamp;
+        exp = block.timestamp + _dur;
 
         require(cov >= 1 && cov <= 1000, "invalid cov");
         // Check cap > 0 when tot > 0
@@ -105,22 +105,18 @@ contract Stake is Auth {
         shares[address(this)] = 1;
     }
 
-    function stopped() public view returns (bool) {
-        return uint256(state) > uint256(State.Live);
-    }
-
     // Remaining rewards
     function pot() public view returns (uint256 rem) {
         if (next > 0) {
             if (block.timestamp < next) {
-                rem = rate * (next - block.timestamp);
-                rem += nextRate * dur;
+                rem = rate * (next - block.timestamp) / R;
+                rem += nextRate * dur / R;
             } else if (block.timestamp < exp) {
-                rem = nextRate * (exp - block.timestamp);
+                rem = nextRate * (exp - block.timestamp) / R;
             }
         } else {
             if (block.timestamp < exp) {
-                rem = rate * (exp - block.timestamp);
+                rem = rate * (exp - block.timestamp) / R;
             }
         }
     }
@@ -134,7 +130,7 @@ contract Stake is Auth {
     // total / cov / dur <= buckets[0] / dur <= rate, since rate always increases after inc()
     // sum(c * dt) <= total / cov / dur * sum(dt) = total / cov
     function cap(uint256 r, uint256 tot) private view returns (uint256) {
-        return Math.min(r * R, tot * R / (cov * dur));
+        return Math.min(r, tot * R / (cov * dur));
     }
 
     // Calculate claimable rewards of a user
@@ -165,7 +161,7 @@ contract Stake is Auth {
             uint256 c = cap(rate, tot);
             uint256 dt = next - last;
             a += c * dt / (tot + 1);
-            saved += (rate * R - c) * dt / R;
+            saved += (rate - c) * dt / R;
 
             last = next;
             rate = nextRate;
@@ -178,7 +174,7 @@ contract Stake is Auth {
         uint256 c = cap(rate, tot);
         uint256 dt = t - last;
         a += c * dt / (tot + 1);
-        saved += (rate * R - c) * dt / R;
+        saved += (rate - c) * dt / R;
 
         acc = a;
         last = t;
@@ -274,7 +270,7 @@ contract Stake is Auth {
         uint256 t = next > 0 ? next : exp;
         uint256 delta = amt / (t - block.timestamp);
         require(delta > 0, "delta rate = 0");
-        rate += delta;
+        rate += delta * R;
         topped += amt;
         buckets[0] += amt;
 
@@ -297,7 +293,7 @@ contract Stake is Auth {
             buckets[1] += amt;
         }
 
-        nextRate = r;
+        nextRate = r * R;
         next = exp;
         exp += dur;
 

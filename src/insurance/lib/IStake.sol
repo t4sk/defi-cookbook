@@ -2,8 +2,14 @@
 pragma solidity 0.8.32;
 
 interface IStake {
-    function stopped() external view returns (bool);
-    function state() external view returns (uint256);
+    enum State {
+        Live,
+        Stopped,
+        Cover,
+        Exit
+    }
+
+    function state() external view returns (State);
     function token() external view returns (address);
     function deposit(uint256 amt) external;
     function withdraw(address usr, address dst, uint256 amt) external;

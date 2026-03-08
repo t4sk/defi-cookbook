@@ -4,29 +4,25 @@ pragma solidity 0.8.32;
 import {Test} from "forge-std/Test.sol";
 import {ERC20} from "@src/lib/ERC20.sol";
 import {Stake} from "@src/insurance/Stake.sol";
-import {DepositDelay} from "@src/insurance/DepositDelay.sol";
 import {WithdrawDelay} from "@src/insurance/WithdrawDelay.sol";
 
 contract WithdrawDelayTest is Test {
     ERC20 token;
     Stake stake;
-    DepositDelay dep;
     WithdrawDelay with;
 
     uint256 constant DUR = 30 * 24 * 3600;
     uint256 constant DUST = 1e18;
-    uint256 constant DELAY = 1 days;
+    uint256 constant COV = 1;
     uint256 constant EPOCH = 1 days;
     address constant INSUREE = address(10);
     address[] users = [address(100), address(101), address(102)];
 
     function setUp() public {
         token = new ERC20("test", "TEST", 18);
-        stake = new Stake(address(token), DUR, INSUREE, DUST);
-        dep = new DepositDelay(address(stake), DELAY);
+        stake = new Stake(address(token), INSUREE, DUR, DUST, COV);
         with = new WithdrawDelay(address(stake), EPOCH);
 
-        stake.allow(address(dep));
         stake.allow(address(with));
 
         token.mint(INSUREE, 1e18 * DUR);
@@ -38,12 +34,9 @@ contract WithdrawDelayTest is Test {
         for (uint256 i = 0; i < users.length; i++) {
             token.mint(users[i], 100 * 1e18);
             vm.prank(users[i]);
-            token.approve(address(dep), type(uint256).max);
+            token.approve(address(stake), type(uint256).max);
             vm.prank(users[i]);
-            uint256 idx = dep.queue(10 * DUST);
-            skip(DELAY);
-            vm.prank(users[i]);
-            dep.deposit(idx);
+            stake.deposit(10 * DUST);
         }
     }
 
@@ -195,7 +188,7 @@ contract WithdrawDelayTest is Test {
         assertEq(amt, 5 * DUST);
         assertTrue(with.stopped());
         assertEq(with.dumped(), 5 * DUST);
-        assertEq(with.keep(), 0);
+        assertEq(with.keep(), 5 * DUST);
     }
 
     function test_dump_no_pending() public {
@@ -240,6 +233,91 @@ contract WithdrawDelayTest is Test {
         with.dump();
     }
 
+    function test_cover() public {
+        vm.prank(users[0]);
+        with.queue(3 * DUST);
+        vm.prank(users[1]);
+        with.queue(2 * DUST);
+
+        with.dump();
+        stake.settle(Stake.State.Cover);
+
+        uint256 keepBefore = with.keep();
+        with.cover(INSUREE);
+
+        assertEq(with.dumped(), 0);
+        assertEq(with.keep(), keepBefore - 5 * DUST);
+    }
+
+    function test_cover_not_stopped() public {
+        vm.expectRevert("not stopped");
+        with.cover(INSUREE);
+    }
+
+    function test_cover_invalid_state() public {
+        with.dump();
+        vm.expectRevert("invalid state");
+        with.cover(INSUREE);
+    }
+
+    function test_cover_not_auth() public {
+        with.dump();
+        stake.settle(Stake.State.Cover);
+        vm.expectRevert();
+        vm.prank(users[0]);
+        with.cover(INSUREE);
+    }
+
+    function test_cover_transfers() public {
+        vm.prank(users[0]);
+        with.queue(3 * DUST);
+
+        with.dump();
+        stake.settle(Stake.State.Cover);
+
+        uint256 balBefore = token.balanceOf(INSUREE);
+        with.cover(INSUREE);
+        uint256 balAfter = token.balanceOf(INSUREE);
+
+        // dst receives dumped + total staked
+        assertGt(balAfter, balBefore);
+    }
+
+    function test_cover_no_dumped() public {
+        with.dump();
+        stake.settle(Stake.State.Cover);
+
+        // dumped = 0, keep = 0, cover is a no-op transfer of total staked
+        uint256 keepBefore = with.keep();
+        with.cover(INSUREE);
+        assertEq(with.dumped(), 0);
+        assertEq(with.keep(), keepBefore);
+    }
+
+    function test_unlock_after_cover() public {
+        address usr = users[0];
+        vm.prank(usr);
+        uint256 i = with.queue(DUST);
+
+        // Dump before lock expires
+        skip(EPOCH);
+        with.dump();
+        assertGt(with.dumped(), 0);
+
+        // Cover transfers dumped tokens out
+        stake.settle(Stake.State.Cover);
+        with.cover(INSUREE);
+        assertEq(with.dumped(), 0);
+
+        // Wait for lock to expire
+        skip(EPOCH);
+
+        // Tokens were used for cover, keep underflows
+        vm.expectRevert();
+        vm.prank(usr);
+        with.unlock(i);
+    }
+
     function test_refill() public {
         vm.prank(users[0]);
         with.queue(3 * DUST);
@@ -249,11 +327,9 @@ contract WithdrawDelayTest is Test {
         uint256 amt = with.dump();
         assertEq(amt, 5 * DUST);
         assertEq(with.dumped(), 5 * DUST);
-        assertEq(with.keep(), 0);
+        assertEq(with.keep(), 5 * DUST);
 
-        // Refill
-        token.mint(address(this), 5 * DUST);
-        token.approve(address(with), 5 * DUST);
+        stake.settle(Stake.State.Exit);
         with.refill();
 
         assertEq(with.dumped(), 0);
@@ -264,7 +340,7 @@ contract WithdrawDelayTest is Test {
         with.dump();
         assertEq(with.dumped(), 0);
 
-        // Refill with 0 dumped is a no-op
+        stake.settle(Stake.State.Exit);
         with.refill();
         assertEq(with.dumped(), 0);
         assertEq(with.keep(), 0);
@@ -277,8 +353,15 @@ contract WithdrawDelayTest is Test {
 
     function test_refill_not_auth() public {
         with.dump();
+        stake.settle(Stake.State.Exit);
         vm.expectRevert();
         vm.prank(users[0]);
+        with.refill();
+    }
+
+    function test_refill_invalid_state() public {
+        with.dump();
+        vm.expectRevert("invalid state");
         with.refill();
     }
 
@@ -293,8 +376,7 @@ contract WithdrawDelayTest is Test {
         assertGt(with.dumped(), 0);
 
         // Refill
-        token.mint(address(this), DUST);
-        token.approve(address(with), DUST);
+        stake.settle(Stake.State.Exit);
         with.refill();
         assertEq(with.dumped(), 0);
 

@@ -11,8 +11,10 @@ contract StakeTest is Test {
     ERC20 token;
     Stake stake;
 
+    uint256 constant R = 1e9;
     uint256 constant DUR = 30 * 24 * 3600;
     uint256 constant DUST = 1e18;
+    uint256 constant COV = 1;
     address constant INSUREE = address(10);
     address constant COVER = address(11);
     address[] users = [address(100), address(101), address(102)];
@@ -20,7 +22,7 @@ contract StakeTest is Test {
     function setUp() public {
         helper = new TestHelper();
         token = new ERC20("test", "TEST", 18);
-        stake = new Stake(address(token), DUR, INSUREE, DUST);
+        stake = new Stake(address(token), INSUREE, DUR, DUST, COV);
 
         token.mint(address(this), 1000 * 1e18);
         token.approve(address(stake), type(uint256).max);
@@ -33,6 +35,17 @@ contract StakeTest is Test {
 
         token.mint(COVER, 100 * 1e18);
         token.approve(COVER, type(uint256).max);
+
+        for (uint256 i = 0; i < users.length; i++) {
+            vm.prank(users[i]);
+            token.approve(address(stake), type(uint256).max);
+        }
+    }
+
+    function _deposit(address usr, uint256 amt) internal {
+        token.mint(usr, amt);
+        vm.prank(usr);
+        stake.deposit(amt);
     }
 
     function test_constructor() public {
@@ -44,52 +57,47 @@ contract StakeTest is Test {
         assertEq(uint256(stake.state()), uint256(Stake.State.Live));
         assertEq(stake.insuree(), INSUREE);
         assertEq(stake.dust(), DUST);
+        assertEq(stake.cov(), COV);
         assertEq(stake.total(), 0);
         assertEq(stake.shares(address(stake)), 1);
-        assertEq(stake.stopped(), false);
     }
 
     function test_deposit() public {
         address usr = users[0];
         uint256 amt = DUST;
-        stake.deposit(usr, amt);
+        _deposit(usr, amt);
         assertEq(stake.total(), amt);
         assertEq(stake.shares(usr), amt);
     }
 
-    function test_deposit_not_auth() public {
-        vm.expectRevert(bytes("not auth"));
-        vm.prank(users[0]);
-        stake.deposit(users[0], DUST);
-    }
-
     function test_deposit_not_live() public {
         stake.stop();
+        token.mint(users[0], DUST);
         vm.expectRevert(bytes("not live"));
-        stake.deposit(users[0], DUST);
+        vm.prank(users[0]);
+        stake.deposit(DUST);
     }
 
     function test_deposit_expired() public {
         vm.warp(stake.exp());
+        token.mint(users[0], DUST);
         vm.expectRevert(bytes("expired"));
-        stake.deposit(users[0], DUST);
-    }
-
-    function test_deposit_invalid_usr() public {
-        vm.expectRevert(bytes("invalid usr"));
-        stake.deposit(address(stake), DUST);
+        vm.prank(users[0]);
+        stake.deposit(DUST);
     }
 
     function test_deposit_dust() public {
+        token.mint(users[0], DUST);
         vm.expectRevert(bytes("dust"));
-        stake.deposit(users[0], DUST - 1);
+        vm.prank(users[0]);
+        stake.deposit(DUST - 1);
     }
 
     function test_withdraw() public {
         address usr = users[0];
         address dst = users[1];
         uint256 amt = DUST;
-        stake.deposit(usr, amt);
+        _deposit(usr, amt);
 
         stake.withdraw(usr, dst, amt);
         assertEq(stake.total(), 0);
@@ -101,7 +109,7 @@ contract StakeTest is Test {
         address usr = users[0];
         address dst = users[1];
         uint256 amt = DUST;
-        stake.deposit(usr, amt);
+        _deposit(usr, amt);
 
         vm.expectRevert(bytes("not auth"));
         vm.prank(usr);
@@ -112,7 +120,7 @@ contract StakeTest is Test {
         address usr = users[0];
         address dst = users[1];
         uint256 amt = DUST;
-        stake.deposit(usr, amt);
+        _deposit(usr, amt);
         stake.stop();
 
         vm.expectRevert(bytes("not live"));
@@ -123,7 +131,7 @@ contract StakeTest is Test {
         address usr = users[0];
         address dst = users[1];
         uint256 amt = DUST;
-        stake.deposit(usr, amt);
+        _deposit(usr, amt);
         vm.warp(stake.exp());
 
         vm.expectRevert(bytes("expired"));
@@ -133,7 +141,7 @@ contract StakeTest is Test {
     function test_withdraw_invalid_usr() public {
         address dst = users[1];
         uint256 amt = DUST;
-        stake.deposit(users[0], amt);
+        _deposit(users[0], amt);
 
         vm.expectRevert(bytes("invalid usr"));
         stake.withdraw(address(stake), dst, amt);
@@ -143,7 +151,7 @@ contract StakeTest is Test {
         address usr = users[0];
         address dst = users[1];
         uint256 amt = DUST;
-        stake.deposit(usr, amt);
+        _deposit(usr, amt);
 
         vm.expectRevert(bytes("dust"));
         stake.withdraw(usr, dst, DUST - 1);
@@ -152,7 +160,7 @@ contract StakeTest is Test {
     function test_take() public {
         address usr = users[0];
         uint256 amt = DUST;
-        stake.deposit(usr, amt);
+        _deposit(usr, amt);
 
         vm.prank(usr);
         assertEq(stake.take(), 0);
@@ -187,7 +195,7 @@ contract StakeTest is Test {
     function test_restake() public {
         address usr = users[0];
         uint256 amt = DUST;
-        stake.deposit(usr, amt);
+        _deposit(usr, amt);
 
         skip(DUR / 2);
 
@@ -203,7 +211,7 @@ contract StakeTest is Test {
     function test_restake_not_live() public {
         address usr = users[0];
         uint256 amt = DUST;
-        stake.deposit(usr, amt);
+        _deposit(usr, amt);
 
         skip(DUR / 2);
         stake.stop();
@@ -216,7 +224,7 @@ contract StakeTest is Test {
     function test_restake_expired() public {
         address usr = users[0];
         uint256 amt = DUST;
-        stake.deposit(usr, amt);
+        _deposit(usr, amt);
 
         vm.warp(stake.exp());
 
@@ -228,7 +236,7 @@ contract StakeTest is Test {
     function test_refund() public {
         address usr = users[0];
         uint256 amt = DUST;
-        stake.deposit(usr, amt);
+        _deposit(usr, amt);
 
         vm.prank(INSUREE);
         stake.refund();
@@ -319,13 +327,12 @@ contract StakeTest is Test {
 
     function test_roll() public {
         uint256 r = 100;
-        uint256 amt = r * DUR;
 
         skip(DUR / 2 + 1);
         vm.prank(INSUREE);
         stake.roll(r);
 
-        assertEq(stake.nextRate(), r);
+        assertEq(stake.nextRate(), r * R);
         assertEq(stake.next(), stake.exp() - DUR);
         assertEq(stake.exp(), stake.next() + DUR);
 
@@ -362,7 +369,7 @@ contract StakeTest is Test {
 
     function test_stop() public {
         stake.stop();
-        assertTrue(stake.stopped());
+        assertEq(uint256(stake.state()), uint256(Stake.State.Stopped));
         assertApproxEqAbs(stake.keep(), stake.topped(), 1);
     }
 
@@ -446,7 +453,7 @@ contract StakeTest is Test {
     function test_exit() public {
         address usr = users[0];
         uint256 amt = DUST;
-        stake.deposit(usr, amt);
+        _deposit(usr, amt);
 
         skip(DUR / 2);
         stake.stop();
@@ -465,7 +472,7 @@ contract StakeTest is Test {
     function test_exit_expired() public {
         address usr = users[0];
         uint256 amt = DUST;
-        stake.deposit(usr, amt);
+        _deposit(usr, amt);
 
         vm.warp(stake.exp() + 1);
 
@@ -484,7 +491,7 @@ contract StakeTest is Test {
     function test_recover() public {
         address usr = users[0];
         uint256 amt = DUST;
-        stake.deposit(usr, amt);
+        _deposit(usr, amt);
 
         skip(DUR / 2);
 
@@ -539,60 +546,55 @@ contract StakeTest is Test {
 
     function test_calc() public {
         uint256 amt = stake.topped();
-        token.mint(address(this), amt);
-        stake.deposit(users[0], amt);
+        _deposit(users[0], amt);
 
         assertEq(stake.calc(users[0]), 0);
         assertEq(stake.calc(users[1]), 0);
 
         vm.warp(stake.exp() - DUR / 2);
-        assertApproxEqAbs(stake.calc(users[0]), stake.topped() / 2, 1e7);
+        assertApproxEqAbs(stake.calc(users[0]), stake.topped() / 2, 1e16);
         assertEq(stake.calc(users[1]), 0);
 
         vm.warp(stake.exp());
-        assertApproxEqAbs(stake.calc(users[0]), stake.topped(), 1e7);
+        assertApproxEqAbs(stake.calc(users[0]), stake.topped(), 1e16);
         assertEq(stake.calc(users[1]), 0);
     }
 
     function test_calc_cap() public {
         uint256 amt = stake.topped() / 2;
         uint256 rate = amt / DUR;
-        token.mint(address(this), amt);
-        stake.deposit(users[0], amt);
+        _deposit(users[0], amt);
 
         assertEq(stake.calc(users[0]), 0);
         assertEq(stake.calc(users[1]), 0);
 
         vm.warp(stake.exp() - DUR / 2);
-        assertApproxEqAbs(stake.calc(users[0]), rate * DUR / 2, 1e7);
+        assertApproxEqAbs(stake.calc(users[0]), rate * DUR / 2, 1e16);
         assertEq(stake.calc(users[1]), 0);
 
         vm.warp(stake.exp());
-        assertApproxEqAbs(stake.calc(users[0]), rate * DUR, 1e7);
+        assertApproxEqAbs(stake.calc(users[0]), rate * DUR, 1e16);
         assertEq(stake.calc(users[1]), 0);
     }
 
     function test_calc_next() public {
         uint256 amt = stake.topped();
-        token.mint(address(this), amt);
-        stake.deposit(users[0], amt);
+        _deposit(users[0], amt);
 
         vm.warp(stake.exp() - DUR / 2 + 1);
 
-        uint256 t0 = stake.topped();
         uint256 r = 100;
         vm.prank(INSUREE);
         stake.roll(r);
 
         vm.warp(stake.exp());
-        assertApproxEqAbs(stake.calc(users[0]), stake.topped(), 1e7);
+        assertApproxEqAbs(stake.calc(users[0]), stake.topped(), 1e16);
         assertEq(stake.calc(users[1]), 0);
     }
 
     function test_sync() public {
         uint256 amt = stake.topped();
-        token.mint(address(this), amt);
-        stake.deposit(users[0], amt);
+        _deposit(users[0], amt);
 
         assertEq(stake.sync(users[0]), 0);
         assertEq(stake.sync(users[1]), 0);
@@ -600,26 +602,25 @@ contract StakeTest is Test {
         assertEq(stake.rewards(users[1]), 0);
 
         vm.warp(stake.exp() - DUR / 2);
-        assertApproxEqAbs(stake.sync(users[0]), stake.topped() / 2, 1e7);
+        assertApproxEqAbs(stake.sync(users[0]), stake.topped() / 2, 1e16);
         assertEq(stake.sync(users[1]), 0);
         // Call again
         assertEq(stake.sync(users[0]), 0);
         assertEq(stake.sync(users[1]), 0);
-        assertApproxEqAbs(stake.rewards(users[0]), stake.topped() / 2, 1e7);
+        assertApproxEqAbs(stake.rewards(users[0]), stake.topped() / 2, 1e16);
         assertEq(stake.rewards(users[1]), 0);
 
         vm.warp(stake.exp());
-        assertApproxEqAbs(stake.sync(users[0]), stake.topped() / 2, 1e7);
+        assertApproxEqAbs(stake.sync(users[0]), stake.topped() / 2, 1e16);
         assertEq(stake.sync(users[1]), 0);
-        assertApproxEqAbs(stake.rewards(users[0]), stake.topped(), 1e7);
+        assertApproxEqAbs(stake.rewards(users[0]), stake.topped(), 1e16);
         assertEq(stake.rewards(users[1]), 0);
     }
 
     function test_sync_cap() public {
         uint256 amt = stake.topped() / 2;
         uint256 rate = amt / DUR;
-        token.mint(address(this), amt);
-        stake.deposit(users[0], amt);
+        _deposit(users[0], amt);
 
         assertEq(stake.sync(users[0]), 0);
         assertEq(stake.sync(users[1]), 0);
@@ -627,41 +628,40 @@ contract StakeTest is Test {
         assertEq(stake.rewards(users[1]), 0);
 
         vm.warp(stake.exp() - DUR / 2);
-        assertApproxEqAbs(stake.sync(users[0]), rate * DUR / 2, 1e7);
+        assertApproxEqAbs(stake.sync(users[0]), rate * DUR / 2, 1e16);
         assertEq(stake.sync(users[1]), 0);
-        assertApproxEqAbs(stake.rewards(users[0]), rate * DUR / 2, 1e7);
+        assertApproxEqAbs(stake.rewards(users[0]), rate * DUR / 2, 1e16);
         assertEq(stake.rewards(users[1]), 0);
-        assertEq(stake.keep(), (stake.rate() - rate) * DUR / 2);
+        assertEq(stake.keep(), (stake.rate() / R - rate) * DUR / 2);
 
         vm.warp(stake.exp());
-        assertApproxEqAbs(stake.sync(users[0]), rate * DUR / 2, 1e7);
+        assertApproxEqAbs(stake.sync(users[0]), rate * DUR / 2, 1e16);
         assertEq(stake.sync(users[1]), 0);
-        assertApproxEqAbs(stake.rewards(users[0]), rate * DUR, 1e7);
+        assertApproxEqAbs(stake.rewards(users[0]), rate * DUR, 1e16);
         assertEq(stake.rewards(users[1]), 0);
-        assertEq(stake.keep(), (stake.rate() - rate) * DUR);
+        assertEq(stake.keep(), (stake.rate() / R - rate) * DUR);
     }
 
     function test_sync_next() public {
         uint256 amt = stake.topped();
-        token.mint(address(this), amt);
-        stake.deposit(users[0], amt);
+        _deposit(users[0], amt);
 
         vm.warp(stake.exp() - DUR / 2 + 1);
 
-        uint256 r0 = stake.rate();
+        uint256 r0 = stake.rate() / R;
         uint256 r1 = 100;
         vm.prank(INSUREE);
         stake.roll(r1);
 
-        assertApproxEqAbs(stake.sync(users[0]), r0 * (DUR / 2 + 1), 1e7);
+        assertApproxEqAbs(stake.sync(users[0]), r0 * (DUR / 2 + 1), 1e16);
 
         vm.warp(stake.next());
-        assertApproxEqAbs(stake.sync(users[0]), r0 * (DUR / 2 - 1), 1e7);
-        assertEq(stake.rate(), r1);
+        assertApproxEqAbs(stake.sync(users[0]), r0 * (DUR / 2 - 1), 1e16);
+        assertEq(stake.rate(), r1 * R);
         assertEq(stake.next(), 0);
         assertEq(stake.nextRate(), 0);
 
         vm.warp(stake.exp());
-        assertApproxEqAbs(stake.sync(users[0]), r1 * DUR, 1e7);
+        assertApproxEqAbs(stake.sync(users[0]), r1 * DUR, 1e16);
     }
 }

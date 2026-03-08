@@ -127,7 +127,7 @@ contract WithdrawDelay is Auth {
 
     function cover(address dst) external auth {
         require(stopped, "not stopped");
-        require(stake.state() == 2, "invalid state");
+        require(stake.state() == IStake.State.Cover, "invalid state");
         uint256 amt = dumped;
         keep -= amt;
         dumped = 0;
@@ -137,7 +137,7 @@ contract WithdrawDelay is Auth {
 
     function refill() external auth {
         require(stopped, "not stopped");
-        require(stake.state() == 3, "invalid state");
+        require(stake.state() == IStake.State.Exit, "invalid state");
         dumped = 0;
     }
 
