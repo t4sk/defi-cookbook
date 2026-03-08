@@ -29,7 +29,7 @@ contract Stake is Auth {
     // Minimum amount to deposit and must remain in stake
     uint256 public immutable dust;
     // Target coverage
-    // Total rewards paid in a duration <= min(buckets[0], max total staked / cov)
+    // Total rewards paid in a duration <= min(total reward allocated in duration, max total staked / cov)
     uint256 public immutable cov;
 
     enum State {
@@ -71,8 +71,6 @@ contract Stake is Auth {
     uint256 public topped;
     // Total amount of rewards claimed (transferred out or restaked)
     uint256 public paid;
-    // Total rewards allocated for current and next duration
-    uint256[2] public buckets;
 
     modifier live() {
         require(state == State.Live, "not live");
@@ -97,10 +95,10 @@ contract Stake is Auth {
         exp = block.timestamp + _dur;
 
         require(cov >= 1 && cov <= 1000, "invalid cov");
-        // Check cap > 0 when tot > 0
+        // Check cap() > 0 when tot > 0
         require(dust * R >= cov * dur, "dust < cov * dur");
 
-        // Insuree can claim rewards while no one staked
+        // Insuree can reclaim rewards while no one staked
         // Some calculations are done with total + 1 to account for this share
         shares[address(this)] = 1;
     }
@@ -122,12 +120,13 @@ contract Stake is Auth {
     }
 
     // Cap on rate.
-    // If total staked <= cov * bucket,
+    // a = total reward allocated for the duration
+    // If total staked <= cov * a
     // then total rewards paid <= total staked / cov
     // Let c = cap
-    // sum(c * dt) <= sum(r * dt) <= buckets[0]
-    // if total <= cov * buckets[0] for the whole duration
-    // total / cov / dur <= buckets[0] / dur <= rate, since rate always increases after inc()
+    // sum(c * dt) <= sum(r * dt) <= a
+    // if total <= cov * a for the whole duration
+    // total / cov / dur <= a / dur <= rate, since rate always increases after inc()
     // sum(c * dt) <= total / cov / dur * sum(dt) = total / cov
     function cap(uint256 r, uint256 tot) private view returns (uint256) {
         return Math.min(r, tot * R / (cov * dur));
@@ -168,8 +167,6 @@ contract Stake is Auth {
             rate = nextRate;
             nextRate = 0;
             next = 0;
-            buckets[0] = buckets[1];
-            buckets[1] = 0;
         }
 
         uint256 r = rate;
@@ -274,7 +271,6 @@ contract Stake is Auth {
         require(delta > 0, "delta rate = 0");
         rate += delta * R;
         topped += amt;
-        buckets[0] += amt;
 
         emit Inc(amt);
     }
@@ -292,7 +288,6 @@ contract Stake is Auth {
             uint256 amt = r * dur;
             token.safeTransferFrom(msg.sender, address(this), amt);
             topped += amt;
-            buckets[1] += amt;
         }
 
         nextRate = r * R;
