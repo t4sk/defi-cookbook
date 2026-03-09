@@ -6,7 +6,6 @@ import {ERC20} from "@src/lib/ERC20.sol";
 import {Factory} from "@src/insurance/Factory.sol";
 import {Stake} from "@src/insurance/Stake.sol";
 import {WithdrawDelay} from "@src/insurance/WithdrawDelay.sol";
-import {Auth} from "@src/insurance/lib/Auth.sol";
 
 contract FactoryTest is Test {
     ERC20 token;

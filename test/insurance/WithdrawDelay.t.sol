@@ -164,14 +164,11 @@ contract WithdrawDelayTest is Test {
         vm.prank(usr);
         uint256 i = with.queue(DUST);
 
-        // Dump before lock expires
         skip(EPOCH);
         with.dump();
 
-        // Wait for lock to expire
         skip(EPOCH);
 
-        // lock.exp > dump's last epoch AND dumped > 0 => reverts
         vm.expectRevert("dumped");
         vm.prank(usr);
         with.unlock(i);
@@ -279,7 +276,6 @@ contract WithdrawDelayTest is Test {
         with.cover(INSUREE);
         uint256 balAfter = token.balanceOf(INSUREE);
 
-        // dst receives dumped + total staked
         assertGt(balAfter, balBefore);
     }
 
@@ -287,7 +283,6 @@ contract WithdrawDelayTest is Test {
         with.dump();
         stake.settle(Stake.State.Cover);
 
-        // dumped = 0, keep = 0, cover is a no-op transfer of total staked
         uint256 keepBefore = with.keep();
         with.cover(INSUREE);
         assertEq(with.dumped(), 0);
@@ -299,20 +294,16 @@ contract WithdrawDelayTest is Test {
         vm.prank(usr);
         uint256 i = with.queue(DUST);
 
-        // Dump before lock expires
         skip(EPOCH);
         with.dump();
         assertGt(with.dumped(), 0);
 
-        // Cover transfers dumped tokens out
         stake.settle(Stake.State.Cover);
         with.cover(INSUREE);
         assertEq(with.dumped(), 0);
 
-        // Wait for lock to expire
         skip(EPOCH);
 
-        // Tokens were used for cover, keep underflows
         vm.expectRevert();
         vm.prank(usr);
         with.unlock(i);
@@ -370,20 +361,16 @@ contract WithdrawDelayTest is Test {
         vm.prank(usr);
         uint256 i = with.queue(DUST);
 
-        // Dump before lock expires
         skip(EPOCH);
         with.dump();
         assertGt(with.dumped(), 0);
 
-        // Refill
         stake.settle(Stake.State.Exit);
         with.refill();
         assertEq(with.dumped(), 0);
 
-        // Wait for lock to expire
         skip(EPOCH);
 
-        // After refill, dumped == 0 so unlock succeeds
         uint256 balBefore = token.balanceOf(usr);
         vm.prank(usr);
         with.unlock(i);

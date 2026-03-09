@@ -286,10 +286,8 @@ contract StakeTest is Test {
 
         vm.prank(INSUREE);
         stake.refund();
-        // Refund = topped / 2 + keep
         assertApproxEqAbs(stake.paid(), stake.topped(), 1);
 
-        // Refund again
         vm.prank(INSUREE);
         stake.refund();
         assertApproxEqAbs(stake.paid(), stake.topped(), 1);
@@ -408,7 +406,6 @@ contract StakeTest is Test {
         stake.settle(Stake.State.Cover);
         assertEq(uint256(stake.state()), uint256(Stake.State.Cover));
 
-        // Cannot settle again
         vm.expectRevert("not stopped");
         stake.settle(Stake.State.Cover);
     }
