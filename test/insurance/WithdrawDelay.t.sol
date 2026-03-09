@@ -219,7 +219,7 @@ contract WithdrawDelayTest is Test {
     }
 
     function test_stop_not_auth() public {
-        vm.expectRevert();
+        vm.expectRevert("not auth");
         vm.prank(users[0]);
         with.stop();
     }
@@ -248,7 +248,7 @@ contract WithdrawDelayTest is Test {
     }
 
     function test_cover_not_stopped() public {
-        vm.expectRevert();
+        vm.expectRevert("not stopped");
         with.cover(INSUREE);
     }
 
@@ -262,7 +262,7 @@ contract WithdrawDelayTest is Test {
         with.stop();
         stake.stop();
         stake.settle(Stake.State.Cover);
-        vm.expectRevert();
+        vm.expectRevert("not auth");
         vm.prank(users[0]);
         with.cover(INSUREE);
     }
@@ -345,7 +345,7 @@ contract WithdrawDelayTest is Test {
     }
 
     function test_refill_not_stopped() public {
-        vm.expectRevert();
+        vm.expectRevert("not stopped");
         with.refill();
     }
 
@@ -353,7 +353,7 @@ contract WithdrawDelayTest is Test {
         with.stop();
         stake.stop();
         stake.settle(Stake.State.Exit);
-        vm.expectRevert();
+        vm.expectRevert("not auth");
         vm.prank(users[0]);
         with.refill();
     }
@@ -398,7 +398,7 @@ contract WithdrawDelayTest is Test {
     }
 
     function test_recover_not_auth() public {
-        vm.expectRevert();
+        vm.expectRevert("not auth");
         vm.prank(users[0]);
         with.recover(address(token));
     }
