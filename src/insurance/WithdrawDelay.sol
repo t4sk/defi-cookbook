@@ -11,12 +11,21 @@ contract WithdrawDelay is Auth {
 
     event Queue(address indexed usr, uint256 i, uint256 amt);
     event Unlock(address indexed usr, uint256 i, uint256 amt);
-    event Dump(uint256 amt);
+    event Stop(uint256 amt);
 
     IERC20 public immutable token;
     IStake public immutable stake;
     // Duration of an epoch
     uint256 public immutable EPOCH;
+
+    enum State {
+        Live,
+        Stopped,
+        Covered,
+        Refilled
+    }
+
+    State public state;
 
     struct Lock {
         uint256 amt;
@@ -36,17 +45,22 @@ contract WithdrawDelay is Auth {
     uint256[2] public buckets;
     // Total amount dumped
     uint256 public dumped;
-    bool public stopped;
 
     constructor(address _stake, uint256 _epoch) {
         stake = IStake(_stake);
         token = IERC20(stake.token());
         EPOCH = _epoch;
+        state = State.Live;
         last = (block.timestamp / EPOCH) * EPOCH;
     }
 
-    function queue(uint256 amt) external returns (uint256) {
-        require(!stopped, "stopped");
+    modifier live() {
+        require(state == State.Live, "not live");
+        _;
+    }
+
+    function queue(uint256 amt) external live returns (uint256 i) {
+        require(amt > 0, "amt = 0");
 
         stake.withdraw(msg.sender, address(this), amt);
         keep += amt;
@@ -68,24 +82,27 @@ contract WithdrawDelay is Auth {
         buckets[1] += amt;
         last = curr;
 
-        uint256 i = counts[msg.sender];
+        i = counts[msg.sender];
         locks[msg.sender][i] = Lock({amt: amt, exp: exp});
         counts[msg.sender] = i + 1;
 
         emit Queue(msg.sender, i, amt);
-
-        return i;
     }
 
     function unlock(uint256 i) external {
         require(i < counts[msg.sender], "index out of bound");
-
         Lock storage lock = locks[msg.sender][i];
         require(lock.amt > 0, "lock amt = 0");
-        require(lock.exp <= block.timestamp, "lock not expired");
-        if (stopped) {
-            // Lock expired before dump, dump = 0 or refill was called
-            require(lock.exp <= last || dumped == 0, "dumped");
+
+        State s = state;
+        if (s == State.Live) {
+            require(lock.exp <= block.timestamp, "lock not expired");
+        } else if (s == State.Stopped) {
+            require(lock.exp <= last || dumped == 0, "cannot unlock");
+        } else if (s == State.Covered) {
+            require(lock.exp <= last, "dumped");
+        } else {
+            // Refilled - all locks are expired
         }
 
         uint256 amt = lock.amt;
@@ -97,9 +114,8 @@ contract WithdrawDelay is Auth {
         emit Unlock(msg.sender, i, amt);
     }
 
-    function dump() external auth returns (uint256 amt) {
-        require(!stopped, "stopped");
-        stopped = true;
+    function stop() external auth live returns (uint256 amt) {
+        state = State.Stopped;
 
         uint256 curr = (block.timestamp / EPOCH) * EPOCH;
 
@@ -120,12 +136,14 @@ contract WithdrawDelay is Auth {
             dumped = amt;
         }
 
-        emit Dump(amt);
+        emit Stop(amt);
     }
 
     function cover(address dst) external auth {
-        require(stopped, "not stopped");
+        require(state == State.Stopped);
         require(stake.state() == IStake.State.Cover, "invalid state");
+        state = State.Covered;
+
         uint256 amt = dumped;
         keep -= amt;
         dumped = 0;
@@ -136,8 +154,9 @@ contract WithdrawDelay is Auth {
     }
 
     function refill() external auth {
-        require(stopped, "not stopped");
+        require(state == State.Stopped);
         require(stake.state() == IStake.State.Exit, "invalid state");
+        state = State.Refilled;
         dumped = 0;
     }
 

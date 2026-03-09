@@ -46,7 +46,7 @@ contract WithdrawDelayTest is Test {
         assertEq(with.EPOCH(), EPOCH);
         assertEq(with.keep(), 0);
         assertEq(with.dumped(), 0);
-        assertEq(with.stopped(), false);
+        assertTrue(with.state() == WithdrawDelay.State.Live);
     }
 
     function test_queue() public {
@@ -66,8 +66,8 @@ contract WithdrawDelayTest is Test {
     }
 
     function test_queue_stopped() public {
-        with.dump();
-        vm.expectRevert("stopped");
+        with.stop();
+        vm.expectRevert("not live");
         vm.prank(users[0]);
         with.queue(DUST);
     }
@@ -146,56 +146,56 @@ contract WithdrawDelayTest is Test {
         with.unlock(i);
     }
 
-    function test_unlock_after_dump_old_lock() public {
+    function test_unlock_after_stop_old_lock() public {
         address usr = users[0];
         vm.prank(usr);
         uint256 i = with.queue(DUST);
 
         skip(3 * EPOCH);
-        with.dump();
+        with.stop();
 
         vm.prank(usr);
         with.unlock(i);
     }
 
-    function test_unlock_after_dump_recent_lock() public {
+    function test_unlock_after_stop_recent_lock() public {
         address usr = users[0];
 
         vm.prank(usr);
         uint256 i = with.queue(DUST);
 
         skip(EPOCH);
-        with.dump();
+        with.stop();
 
         skip(EPOCH);
 
-        vm.expectRevert("dumped");
+        vm.expectRevert("cannot unlock");
         vm.prank(usr);
         with.unlock(i);
     }
 
-    function test_dump() public {
+    function test_stop() public {
         vm.prank(users[0]);
         with.queue(3 * DUST);
         vm.prank(users[1]);
         with.queue(2 * DUST);
 
-        uint256 amt = with.dump();
+        uint256 amt = with.stop();
 
         assertEq(amt, 5 * DUST);
-        assertTrue(with.stopped());
+        assertTrue(with.state() == WithdrawDelay.State.Stopped);
         assertEq(with.dumped(), 5 * DUST);
         assertEq(with.keep(), 5 * DUST);
     }
 
-    function test_dump_no_pending() public {
-        uint256 amt = with.dump();
+    function test_stop_no_pending() public {
+        uint256 amt = with.stop();
         assertEq(amt, 0);
-        assertTrue(with.stopped());
+        assertTrue(with.state() == WithdrawDelay.State.Stopped);
         assertEq(with.dumped(), 0);
     }
 
-    function test_dump_buckets_shift() public {
+    function test_stop_buckets_shift() public {
         vm.prank(users[0]);
         with.queue(3 * DUST);
 
@@ -203,31 +203,31 @@ contract WithdrawDelayTest is Test {
         vm.prank(users[1]);
         with.queue(2 * DUST);
 
-        uint256 amt = with.dump();
+        uint256 amt = with.stop();
         assertEq(amt, 5 * DUST);
     }
 
-    function test_dump_buckets_old() public {
+    function test_stop_buckets_old() public {
         vm.prank(users[0]);
         with.queue(3 * DUST);
 
         skip(3 * EPOCH);
-        uint256 amt = with.dump();
+        uint256 amt = with.stop();
 
         assertEq(amt, 0);
         assertEq(with.keep(), 3 * DUST);
     }
 
-    function test_dump_not_auth() public {
+    function test_stop_not_auth() public {
         vm.expectRevert();
         vm.prank(users[0]);
-        with.dump();
+        with.stop();
     }
 
-    function test_dump_twice() public {
-        with.dump();
-        vm.expectRevert("stopped");
-        with.dump();
+    function test_stop_twice() public {
+        with.stop();
+        vm.expectRevert("not live");
+        with.stop();
     }
 
     function test_cover() public {
@@ -236,7 +236,7 @@ contract WithdrawDelayTest is Test {
         vm.prank(users[1]);
         with.queue(2 * DUST);
 
-        with.dump();
+        with.stop();
         stake.stop();
         stake.settle(Stake.State.Cover);
 
@@ -248,18 +248,18 @@ contract WithdrawDelayTest is Test {
     }
 
     function test_cover_not_stopped() public {
-        vm.expectRevert("not stopped");
+        vm.expectRevert();
         with.cover(INSUREE);
     }
 
     function test_cover_invalid_state() public {
-        with.dump();
+        with.stop();
         vm.expectRevert("invalid state");
         with.cover(INSUREE);
     }
 
     function test_cover_not_auth() public {
-        with.dump();
+        with.stop();
         stake.stop();
         stake.settle(Stake.State.Cover);
         vm.expectRevert();
@@ -271,7 +271,7 @@ contract WithdrawDelayTest is Test {
         vm.prank(users[0]);
         with.queue(3 * DUST);
 
-        with.dump();
+        with.stop();
         stake.stop();
         stake.settle(Stake.State.Cover);
 
@@ -283,7 +283,7 @@ contract WithdrawDelayTest is Test {
     }
 
     function test_cover_no_dumped() public {
-        with.dump();
+        with.stop();
         stake.stop();
         stake.settle(Stake.State.Cover);
 
@@ -299,7 +299,7 @@ contract WithdrawDelayTest is Test {
         uint256 i = with.queue(DUST);
 
         skip(EPOCH);
-        with.dump();
+        with.stop();
         assertGt(with.dumped(), 0);
 
         stake.stop();
@@ -309,7 +309,7 @@ contract WithdrawDelayTest is Test {
 
         skip(EPOCH);
 
-        vm.expectRevert();
+        vm.expectRevert("dumped");
         vm.prank(usr);
         with.unlock(i);
     }
@@ -320,7 +320,7 @@ contract WithdrawDelayTest is Test {
         vm.prank(users[1]);
         with.queue(2 * DUST);
 
-        uint256 amt = with.dump();
+        uint256 amt = with.stop();
         assertEq(amt, 5 * DUST);
         assertEq(with.dumped(), 5 * DUST);
         assertEq(with.keep(), 5 * DUST);
@@ -334,7 +334,7 @@ contract WithdrawDelayTest is Test {
     }
 
     function test_refill_no_dumped() public {
-        with.dump();
+        with.stop();
         assertEq(with.dumped(), 0);
 
         stake.stop();
@@ -345,12 +345,12 @@ contract WithdrawDelayTest is Test {
     }
 
     function test_refill_not_stopped() public {
-        vm.expectRevert("not stopped");
+        vm.expectRevert();
         with.refill();
     }
 
     function test_refill_not_auth() public {
-        with.dump();
+        with.stop();
         stake.stop();
         stake.settle(Stake.State.Exit);
         vm.expectRevert();
@@ -359,7 +359,7 @@ contract WithdrawDelayTest is Test {
     }
 
     function test_refill_invalid_state() public {
-        with.dump();
+        with.stop();
         vm.expectRevert("invalid state");
         with.refill();
     }
@@ -370,15 +370,13 @@ contract WithdrawDelayTest is Test {
         uint256 i = with.queue(DUST);
 
         skip(EPOCH);
-        with.dump();
+        with.stop();
         assertGt(with.dumped(), 0);
 
         stake.stop();
         stake.settle(Stake.State.Exit);
         with.refill();
         assertEq(with.dumped(), 0);
-
-        skip(EPOCH);
 
         uint256 balBefore = token.balanceOf(usr);
         vm.prank(usr);
