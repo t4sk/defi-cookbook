@@ -148,9 +148,9 @@ contract WithdrawDelay is Auth {
         state = State.Covered;
 
         uint256 amt = dumped;
-        keep -= amt;
-        dumped = 0;
         if (amt > 0) {
+            keep -= amt;
+            dumped = 0;
             token.approve(address(stake), amt);
         }
         stake.cover(dst, amt);

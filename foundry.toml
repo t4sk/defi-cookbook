@@ -7,3 +7,6 @@ ignored_error_codes = [2424]
 
 [fmt]
 line_length = 80
+
+[invariant]
+fail_on_revert = true

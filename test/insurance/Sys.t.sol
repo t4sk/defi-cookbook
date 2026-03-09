@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity 0.8.32;
 
-import {Test} from "forge-std/Test.sol";
+import {Test, console} from "forge-std/Test.sol";
 import {ERC20} from "@src/lib/ERC20.sol";
 import {Factory} from "@src/insurance/Factory.sol";
 import {Stake} from "@src/insurance/Stake.sol";
 import {WithdrawDelay} from "@src/insurance/WithdrawDelay.sol";
 
-address constant INSUREE = address(10);
+address constant AUTH = address(10);
+address constant INSUREE = address(11);
 uint256 constant DUR = 30 days;
 uint256 constant DUST = 1e18;
 uint256 constant COV = 1;
@@ -21,7 +22,6 @@ contract Handler is Test {
     // TODO: insuree + auth
     address[] public users = [address(1), address(2), address(3), address(4)];
     address private user;
-
     mapping(address => uint256[]) private locks;
 
     constructor(Stake _stake, WithdrawDelay _wd, ERC20 _token) {
@@ -32,6 +32,8 @@ contract Handler is Test {
             vm.prank(users[i]);
             token.approve(address(stake), type(uint256).max);
         }
+
+        token.approve(address(stake), type(uint256).max);
     }
 
     modifier prank(uint256 seed) {
@@ -45,6 +47,13 @@ contract Handler is Test {
         return block.timestamp < stake.exp() && !stake.stopped();
     }
 
+    function top(address usr, uint256 amt) private {
+        uint256 bal = token.balanceOf(usr);
+        if (amt > bal) {
+            token.mint(usr, amt - bal);
+        }
+    }
+
     function sync(uint256 seed) external prank(seed) {
         stake.sync(user);
     }
@@ -54,10 +63,7 @@ contract Handler is Test {
             return;
         }
         amt = bound(amt, stake.dust(), 100e18);
-        uint256 bal = token.balanceOf(user);
-        if (amt > bal) {
-            token.mint(user, amt - bal);
-        }
+        top(user, amt);
         stake.deposit(amt);
     }
 
@@ -110,19 +116,23 @@ contract Handler is Test {
         i = bound(i, 0, n - 1);
         (uint256 amt, uint256 exp) = wd.locks(user, i);
 
-        // Already unlocked
         if (amt == 0) {
             return;
         }
-        WithdrawDelay.State wdState = wd.state();
-        if (wdState == WithdrawDelay.State.Live) {
-            if (block.timestamp < exp) return;
-        } else if (wdState == WithdrawDelay.State.Stopped) {
-            if (wd.last() < exp && wd.dumped() > 0) return;
-        } else if (wdState == WithdrawDelay.State.Covered) {
-            if (wd.last() < exp) return;
+
+        if (wd.state() == WithdrawDelay.State.Live) {
+            if (block.timestamp < exp) {
+                return;
+            }
+        } else if (wd.state() == WithdrawDelay.State.Stopped) {
+            if (wd.last() < exp && wd.dumped() > 0) {
+                return;
+            }
+        } else if (wd.state() == WithdrawDelay.State.Covered) {
+            if (wd.last() < exp) {
+                return;
+            }
         }
-        // Refilled: all locks unlockable
 
         wd.unlock(i);
 
@@ -132,35 +142,74 @@ contract Handler is Test {
         ixs.pop();
     }
 
-    function stakeStop() external {
-        if (stake.stopped() || block.timestamp >= stake.exp()) return;
+    function refund() external {
+        vm.prank(INSUREE);
+        stake.refund();
+    }
+
+    function inc(uint256 amt) external {
+        if (!live()) {
+            return;
+        }
+        amt = bound(amt, stake.dur(), 10e18);
+        top(address(this), amt);
+        stake.inc(amt);
+    }
+
+    function roll(uint256 rate) external {
+        if (
+            !live() || stake.rate() == 0 || stake.next() > 0
+                || block.timestamp + stake.dur() / 2 <= stake.exp()
+        ) {
+            return;
+        }
+        rate = bound(rate, 0, 1e18);
+        uint256 amt = rate * stake.dur();
+        top(INSUREE, amt);
+        vm.prank(INSUREE);
+        stake.roll(rate);
+    }
+
+    function stop() external {
+        if (!live()) {
+            return;
+        }
+        vm.startPrank(AUTH);
         stake.stop();
-    }
-
-    function wdStop() external {
-        if (wd.stopped()) return;
         wd.stop();
-    }
-
-    function settle(uint256 stateSeed) external {
-        if (stake.state() != Stake.State.Stopped) return;
-        stake.settle(stateSeed % 2 == 0 ? Stake.State.Cover : Stake.State.Exit);
+        vm.stopPrank();
     }
 
     function cover() external {
-        if (
-            wd.state() != WithdrawDelay.State.Stopped
-                || stake.state() != Stake.State.Cover
-        ) return;
-        wd.cover(address(0x99));
+        if (stake.state() != Stake.State.Stopped) {
+            return;
+        }
+        vm.startPrank(AUTH);
+        stake.settle(Stake.State.Cover);
+        wd.cover(INSUREE);
+        vm.stopPrank();
     }
 
     function refill() external {
-        if (
-            wd.state() != WithdrawDelay.State.Stopped
-                || stake.state() != Stake.State.Exit
-        ) return;
+        if (stake.state() != Stake.State.Stopped) {
+            return;
+        }
+        vm.startPrank(AUTH);
+        stake.settle(Stake.State.Exit);
         wd.refill();
+        vm.stopPrank();
+    }
+
+    function recover(uint256 amt) external {
+        amt = bound(amt, 0, 1e18);
+        top(address(this), 2 * amt);
+        token.transfer(address(stake), amt);
+        token.transfer(address(wd), amt);
+
+        vm.startPrank(AUTH);
+        stake.recover(address(token));
+        wd.recover(address(token));
+        vm.stopPrank();
     }
 
     function warp(uint256 secs) external {
@@ -192,8 +241,8 @@ contract SystemInvariantTest is Test {
         stake.inc(1e18 * DUR);
 
         handler = new Handler(stake, wd, token);
-        stake.allow(address(handler));
-        wd.allow(address(handler));
+        stake.allow(AUTH);
+        wd.allow(AUTH);
         targetContract(address(handler));
     }
 
