@@ -267,6 +267,25 @@ contract SystemInvariantTest is Test {
         assertLe(wd.dumped(), wd.keep());
     }
 
+    function invariant_dumped_requires_stopped() public view {
+        if (wd.dumped() > 0) {
+            assertTrue(wd.state() == WithdrawDelay.State.Stopped);
+        }
+    }
+
+    function invariant_wd_stake_state() public view {
+        if (wd.state() == WithdrawDelay.State.Covered) {
+            assertTrue(stake.state() == Stake.State.Cover);
+        }
+        if (wd.state() == WithdrawDelay.State.Refilled) {
+            assertTrue(stake.state() == Stake.State.Exit);
+        }
+    }
+
+    function invariant_dust_share() public view {
+        assertEq(stake.shares(address(stake)), 1);
+    }
+
     function invariant_sys_bal() public view {
         uint256 bal =
             token.balanceOf(address(stake)) + token.balanceOf(address(wd));
