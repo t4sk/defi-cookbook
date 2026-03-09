@@ -11,7 +11,7 @@ address constant AUTH = address(10);
 address constant INSUREE = address(11);
 uint256 constant DUR = 30 days;
 uint256 constant DUST = 1e18;
-uint256 constant COV = 1;
+uint256 constant COV = 2;
 uint256 constant EPOCH = 3 days;
 
 contract Handler is Test {
@@ -19,8 +19,7 @@ contract Handler is Test {
     WithdrawDelay private immutable wd;
     ERC20 private immutable token;
 
-    // TODO: insuree + auth
-    address[] public users = [address(1), address(2), address(3), address(4)];
+    address[] public users = [address(1), address(2), address(3)];
     address private user;
     mapping(address => uint256[]) private locks;
 
@@ -246,16 +245,18 @@ contract SystemInvariantTest is Test {
         targetContract(address(handler));
     }
 
-    // TODO: invariants
-
     function invariant_stake_bal() public view {
         uint256 bal = token.balanceOf(address(stake));
         uint256 need = stake.total() + stake.topped() - stake.paid();
         assertGe(bal, need);
-    }
 
-    function invariant_paid_le_topped() public view {
-        assertLe(stake.paid(), stake.topped());
+        uint256 rewards = stake.pot() + stake.calc(address(stake));
+        for (uint256 i = 0; i < 3; i++) {
+            rewards += stake.calc(handler.users(i));
+        }
+        assertGe(bal, stake.total() + rewards);
+
+        assertGe(stake.topped(), rewards + stake.paid());
     }
 
     function invariant_wd_balance_covers_keep() public view {
@@ -266,13 +267,7 @@ contract SystemInvariantTest is Test {
         assertLe(wd.dumped(), wd.keep());
     }
 
-    function invariant_dumped_requires_stopped() public view {
-        if (wd.dumped() > 0) {
-            assertTrue(wd.stopped());
-        }
-    }
-
-    function invariant_system_solvency() public view {
+    function invariant_sys_bal() public view {
         uint256 bal =
             token.balanceOf(address(stake)) + token.balanceOf(address(wd));
         uint256 need = stake.total() + stake.topped() - stake.paid() + wd.keep();

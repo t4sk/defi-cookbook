@@ -109,6 +109,9 @@ contract Stake is Auth {
 
     // Remaining rewards
     function pot() public view returns (uint256 rem) {
+        if (exp <= block.timestamp) {
+            return 0;
+        }
         if (next > 0) {
             if (block.timestamp < next) {
                 rem = rate * (next - block.timestamp) / R;
