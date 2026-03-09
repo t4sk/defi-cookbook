@@ -120,8 +120,6 @@ contract WithdrawDelay is Auth {
             dumped = amt;
         }
 
-        stake.stop();
-
         emit Dump(amt);
     }
 

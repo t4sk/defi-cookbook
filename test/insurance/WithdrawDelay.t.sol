@@ -237,6 +237,7 @@ contract WithdrawDelayTest is Test {
         with.queue(2 * DUST);
 
         with.dump();
+        stake.stop();
         stake.settle(Stake.State.Cover);
 
         uint256 keepBefore = with.keep();
@@ -259,6 +260,7 @@ contract WithdrawDelayTest is Test {
 
     function test_cover_not_auth() public {
         with.dump();
+        stake.stop();
         stake.settle(Stake.State.Cover);
         vm.expectRevert();
         vm.prank(users[0]);
@@ -270,6 +272,7 @@ contract WithdrawDelayTest is Test {
         with.queue(3 * DUST);
 
         with.dump();
+        stake.stop();
         stake.settle(Stake.State.Cover);
 
         uint256 balBefore = token.balanceOf(INSUREE);
@@ -281,6 +284,7 @@ contract WithdrawDelayTest is Test {
 
     function test_cover_no_dumped() public {
         with.dump();
+        stake.stop();
         stake.settle(Stake.State.Cover);
 
         uint256 keepBefore = with.keep();
@@ -298,6 +302,7 @@ contract WithdrawDelayTest is Test {
         with.dump();
         assertGt(with.dumped(), 0);
 
+        stake.stop();
         stake.settle(Stake.State.Cover);
         with.cover(INSUREE);
         assertEq(with.dumped(), 0);
@@ -320,6 +325,7 @@ contract WithdrawDelayTest is Test {
         assertEq(with.dumped(), 5 * DUST);
         assertEq(with.keep(), 5 * DUST);
 
+        stake.stop();
         stake.settle(Stake.State.Exit);
         with.refill();
 
@@ -331,6 +337,7 @@ contract WithdrawDelayTest is Test {
         with.dump();
         assertEq(with.dumped(), 0);
 
+        stake.stop();
         stake.settle(Stake.State.Exit);
         with.refill();
         assertEq(with.dumped(), 0);
@@ -344,6 +351,7 @@ contract WithdrawDelayTest is Test {
 
     function test_refill_not_auth() public {
         with.dump();
+        stake.stop();
         stake.settle(Stake.State.Exit);
         vm.expectRevert();
         vm.prank(users[0]);
@@ -365,6 +373,7 @@ contract WithdrawDelayTest is Test {
         with.dump();
         assertGt(with.dumped(), 0);
 
+        stake.stop();
         stake.settle(Stake.State.Exit);
         with.refill();
         assertEq(with.dumped(), 0);
