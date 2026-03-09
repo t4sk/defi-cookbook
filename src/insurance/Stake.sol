@@ -103,6 +103,10 @@ contract Stake is Auth {
         shares[address(this)] = 1;
     }
 
+    function stopped() external view returns (bool) {
+        return state != State.Live;
+    }
+
     // Remaining rewards
     function pot() public view returns (uint256 rem) {
         if (next > 0) {

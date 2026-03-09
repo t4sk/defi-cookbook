@@ -54,7 +54,7 @@ contract StakeTest is Test {
         assertEq(stake.last(), block.timestamp);
         assertEq(stake.exp(), block.timestamp + DUR);
         assertEq(stake.dur(), DUR);
-        assertEq(uint256(stake.state()), uint256(Stake.State.Live));
+        assertFalse(stake.stopped());
         assertEq(stake.insuree(), INSUREE);
         assertEq(stake.dust(), DUST);
         assertEq(stake.cov(), COV);
@@ -367,7 +367,7 @@ contract StakeTest is Test {
 
     function test_stop() public {
         stake.stop();
-        assertEq(uint256(stake.state()), uint256(Stake.State.Stopped));
+        assertTrue(stake.stopped());
         assertApproxEqAbs(stake.keep(), stake.topped(), 1);
     }
 

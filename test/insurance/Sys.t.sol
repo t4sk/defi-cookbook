@@ -42,8 +42,7 @@ contract Handler is Test {
     }
 
     function live() private returns (bool) {
-        return
-            block.timestamp < stake.exp() && stake.state() == Stake.State.Live;
+        return block.timestamp < stake.exp() && !stake.stopped();
     }
 
     function sync(uint256 seed) external prank(seed) {
@@ -78,15 +77,14 @@ contract Handler is Test {
     function exit(uint256 seed) external prank(seed) {
         if (
             stake.state() == Stake.State.Exit
-                || (stake.state() == Stake.State.Live
-                    && stake.exp() < block.timestamp)
+                || (!stake.stopped() && stake.exp() < block.timestamp)
         ) {
             stake.exit();
         }
     }
 
     function queue(uint256 seed, uint256 amt) external prank(seed) {
-        if (wd.state() != WithdrawDelay.State.Live || !live()) {
+        if (wd.stopped() || !live()) {
             return;
         }
         uint256 staked = stake.shares(user);
@@ -134,19 +132,14 @@ contract Handler is Test {
         ixs.pop();
     }
 
-    /*
-       TODO
-       inc
-      refund
-    function stop() external {
-        if (stake.state() != Stake.State.Live || block.timestamp >= stake.exp())
-        return;
+    function stakeStop() external {
+        if (stake.stopped() || block.timestamp >= stake.exp()) return;
         stake.stop();
     }
 
-    function dump() external {
-        if (wd.state() != WithdrawDelay.State.Live) return;
-        wd.dump();
+    function wdStop() external {
+        if (wd.stopped()) return;
+        wd.stop();
     }
 
     function settle(uint256 stateSeed) external {
@@ -155,15 +148,20 @@ contract Handler is Test {
     }
 
     function cover() external {
-        if (wd.state() != WithdrawDelay.State.Stopped || stake.state() != Stake.State.Cover) return;
+        if (
+            wd.state() != WithdrawDelay.State.Stopped
+                || stake.state() != Stake.State.Cover
+        ) return;
         wd.cover(address(0x99));
     }
 
     function refill() external {
-        if (wd.state() != WithdrawDelay.State.Stopped || stake.state() != Stake.State.Exit) return;
+        if (
+            wd.state() != WithdrawDelay.State.Stopped
+                || stake.state() != Stake.State.Exit
+        ) return;
         wd.refill();
     }
-    */
 
     function warp(uint256 secs) external {
         secs = bound(secs, 0, stake.dur());
@@ -221,7 +219,7 @@ contract SystemInvariantTest is Test {
 
     function invariant_dumped_requires_stopped() public view {
         if (wd.dumped() > 0) {
-            assertTrue(wd.state() == WithdrawDelay.State.Stopped);
+            assertTrue(wd.stopped());
         }
     }
 

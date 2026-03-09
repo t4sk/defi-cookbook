@@ -10,8 +10,8 @@ interface IWithdrawDelay {
     }
 
     function state() external view returns (State);
-    function dumped() external returns (uint256);
-    function dump() external returns (uint256);
+    function stopped() external view returns (bool);
+    function dumped() external view returns (uint256);
+    function stop() external returns (uint256);
     function refill() external;
 }
-

@@ -46,7 +46,7 @@ contract WithdrawDelayTest is Test {
         assertEq(with.EPOCH(), EPOCH);
         assertEq(with.keep(), 0);
         assertEq(with.dumped(), 0);
-        assertTrue(with.state() == WithdrawDelay.State.Live);
+        assertFalse(with.stopped());
     }
 
     function test_queue() public {
@@ -183,7 +183,7 @@ contract WithdrawDelayTest is Test {
         uint256 amt = with.stop();
 
         assertEq(amt, 5 * DUST);
-        assertTrue(with.state() == WithdrawDelay.State.Stopped);
+        assertTrue(with.stopped());
         assertEq(with.dumped(), 5 * DUST);
         assertEq(with.keep(), 5 * DUST);
     }
@@ -191,7 +191,7 @@ contract WithdrawDelayTest is Test {
     function test_stop_no_pending() public {
         uint256 amt = with.stop();
         assertEq(amt, 0);
-        assertTrue(with.state() == WithdrawDelay.State.Stopped);
+        assertTrue(with.stopped());
         assertEq(with.dumped(), 0);
     }
 

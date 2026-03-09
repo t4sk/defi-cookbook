@@ -59,6 +59,10 @@ contract WithdrawDelay is Auth {
         _;
     }
 
+    function stopped() external view returns (bool) {
+        return state != State.Live;
+    }
+
     function queue(uint256 amt) external live returns (uint256 i) {
         require(amt > 0, "amt = 0");
 
@@ -101,9 +105,8 @@ contract WithdrawDelay is Auth {
             require(lock.exp <= last || dumped == 0, "cannot unlock");
         } else if (s == State.Covered) {
             require(lock.exp <= last, "dumped");
-        } else {
-            // Refilled - all locks are expired
         }
+        // Refilled - all locks are expired
 
         uint256 amt = lock.amt;
         keep -= amt;
@@ -140,7 +143,7 @@ contract WithdrawDelay is Auth {
     }
 
     function cover(address dst) external auth {
-        require(state == State.Stopped);
+        require(state == State.Stopped, "not stopped");
         require(stake.state() == IStake.State.Cover, "invalid state");
         state = State.Covered;
 
@@ -154,7 +157,7 @@ contract WithdrawDelay is Auth {
     }
 
     function refill() external auth {
-        require(state == State.Stopped);
+        require(state == State.Stopped, "not stopped");
         require(stake.state() == IStake.State.Exit, "invalid state");
         state = State.Refilled;
         dumped = 0;

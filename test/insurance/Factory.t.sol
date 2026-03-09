@@ -34,7 +34,7 @@ contract FactoryTest is Test {
         assertEq(stake.insuree(), INSUREE);
         assertEq(stake.dust(), DUST);
         assertEq(stake.cov(), COV);
-        assertEq(uint256(stake.state()), uint256(Stake.State.Live));
+        assertFalse(stake.stopped());
 
         assertEq(address(with.token()), address(token));
         assertEq(address(with.stake()), s);

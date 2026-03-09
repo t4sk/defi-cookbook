@@ -10,6 +10,7 @@ interface IStake {
     }
 
     function state() external view returns (State);
+    function stopped() external view returns (bool);
     function token() external view returns (address);
     function deposit(uint256 amt) external;
     function withdraw(address usr, address dst, uint256 amt) external;
