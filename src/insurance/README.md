@@ -113,12 +113,12 @@ The insuree funds rewards over `dur`. At expiry stakers call `exit()`. The insur
 ### Claim (Cover path)
 
 ```
-Insuree   inc() ─────────────────── (claim event)
-                                          │
-Auth      Stake.stop()                    │
-          Stake.settle(Cover)             │
-          WD.stop()                       │
-          WD.cover(dst) ─────────────────►┘  dumped tokens → insuree
+Insuree   inc() ──────────────────────────── (claim event)
+                                                    │
+Auth      Stake.stop()                              │
+          Stake.settle(Cover)                       │
+          WithdrawDelay.stop()                      │
+          WithdrawDelay.cover(dst) ────────────────►┘  dumped tokens → insuree
 
 Stakers   deposit() ──► queue() ──► unlock()  (pre-stop locks only)
 ```
@@ -130,7 +130,7 @@ Stakers   deposit() ──► queue() ──► unlock()  (pre-stop locks only)
 ### No-claim (Exit / Refill path)
 
 ```
-Auth      Stake.stop() ──► Stake.settle(Exit) ──► WD.refill()
+Auth      Stake.stop() ──► Stake.settle(Exit) ──► WithdrawDelay.refill()
 
 Stakers   exit()    (principal + rewards)
           unlock()  (all queued positions)
