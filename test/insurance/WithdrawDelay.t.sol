@@ -2,12 +2,12 @@
 pragma solidity 0.8.32;
 
 import {Test} from "forge-std/Test.sol";
-import {ERC20} from "@src/lib/ERC20.sol";
+import {Token} from "../Token.sol";
 import {Stake} from "@src/insurance/Stake.sol";
 import {WithdrawDelay} from "@src/insurance/WithdrawDelay.sol";
 
 contract WithdrawDelayTest is Test {
-    ERC20 token;
+    Token token;
     Stake stake;
     WithdrawDelay with;
 
@@ -19,7 +19,7 @@ contract WithdrawDelayTest is Test {
     address[] users = [address(100), address(101), address(102)];
 
     function setUp() public {
-        token = new ERC20("test", "TEST", 18);
+        token = new Token("test", "TEST", 18);
         stake = new Stake(address(token), INSUREE, DUR, DUST, COV);
         with = new WithdrawDelay(address(stake), EPOCH);
 

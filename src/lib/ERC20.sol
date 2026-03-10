@@ -55,14 +55,5 @@ contract ERC20 is IERC20 {
         totalSupply -= amt;
         emit Transfer(src, address(0), amt);
     }
-
-    // Non-ERC20 functions
-    function mint(address dst, uint256 amt) external {
-        _mint(dst, amt);
-    }
-
-    function burn(address src, uint256 amt) external {
-        _burn(src, amt);
-    }
 }
 

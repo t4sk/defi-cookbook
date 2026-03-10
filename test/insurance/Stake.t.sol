@@ -3,12 +3,12 @@ pragma solidity 0.8.32;
 
 import {Test, console} from "forge-std/Test.sol";
 import {TestHelper} from "../TestHelper.sol";
-import {ERC20} from "@src/lib/ERC20.sol";
+import {Token} from "../Token.sol";
 import {Stake} from "@src/insurance/Stake.sol";
 
 contract StakeTest is Test {
     TestHelper helper;
-    ERC20 token;
+    Token token;
     Stake stake;
 
     uint256 constant R = 1e9;
@@ -21,7 +21,7 @@ contract StakeTest is Test {
 
     function setUp() public {
         helper = new TestHelper();
-        token = new ERC20("test", "TEST", 18);
+        token = new Token("test", "TEST", 18);
         stake = new Stake(address(token), INSUREE, DUR, DUST, COV);
 
         token.mint(address(this), 1000 * 1e18);

@@ -2,7 +2,7 @@
 pragma solidity 0.8.32;
 
 import {Test, console} from "forge-std/Test.sol";
-import {ERC20} from "@src/lib/ERC20.sol";
+import {Token} from "../Token.sol";
 import {Factory} from "@src/insurance/Factory.sol";
 import {Stake} from "@src/insurance/Stake.sol";
 import {WithdrawDelay} from "@src/insurance/WithdrawDelay.sol";
@@ -17,13 +17,13 @@ uint256 constant EPOCH = 3 days;
 contract Handler is Test {
     Stake private immutable stake;
     WithdrawDelay private immutable wd;
-    ERC20 private immutable token;
+    Token private immutable token;
 
     address[] public users = [address(1), address(2), address(3)];
     address private user;
     mapping(address => uint256[]) private locks;
 
-    constructor(Stake _stake, WithdrawDelay _wd, ERC20 _token) {
+    constructor(Stake _stake, WithdrawDelay _wd, Token _token) {
         stake = _stake;
         wd = _wd;
         token = _token;
@@ -218,14 +218,14 @@ contract Handler is Test {
 }
 
 contract SystemInvariantTest is Test {
-    ERC20 token;
+    Token token;
     Factory factory;
     Stake stake;
     WithdrawDelay wd;
     Handler handler;
 
     function setUp() public {
-        token = new ERC20("test", "TEST", 18);
+        token = new Token("test", "TEST", 18);
         factory = new Factory();
 
         (address s, address w) =
