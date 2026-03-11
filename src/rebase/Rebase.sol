@@ -12,30 +12,11 @@ contract Rebase is Auth {
     uint256 public total;
     // User => shares
     mapping(address => uint256) public shares;
-    // User => normalized balances
-    mapping(address => uint256) public bals;
 
     constructor() {
         acc = RAY;
         rate = RAY;
         last = block.timestamp;
-    }
-
-    function calc() public view returns (uint256) {
-        return acc * Math.rpow(rate, block.timestamp - last) / RAY;
-    }
-
-    function balance(address usr) external view returns (uint256) {
-        return bals[usr] * calc() / RAY;
-    }
-
-    function sync(address usr) public {
-        uint256 a = calc();
-        acc = a;
-        last = block.timestamp;
-        if (usr != address(0)) {
-            bals[usr] *= a / RAY;
-        }
     }
 
     function set(uint256 r) external auth {
@@ -44,18 +25,33 @@ contract Rebase is Auth {
         rate = r;
     }
 
-    function mint(address usr, uint256 amt) external auth {
-        require(last == block.timestamp, "not synced");
-        total += amt;
-        shares[usr] += amt;
-        bals[usr] += amt * RAY / acc;
+    function calc() public view returns (uint256) {
+        return acc * Math.rpow(rate, block.timestamp - last) / RAY;
     }
 
-    function burn(address usr, uint256 amt) external auth {
+    function balance(address usr) external view returns (uint256) {
+        return shares[usr] * calc() / RAY;
+    }
+
+    function sync() external {
+        acc = calc();
+        last = block.timestamp;
+    }
+
+    function join(address usr, uint256 amt) external auth returns (uint256) {
         require(last == block.timestamp, "not synced");
-        // burn all -> amt = bals[usr] * acc / RAY
-        total -= amt;
-        shares[usr] -= amt;
-        bals[usr] -= amt * RAY / acc;
+        uint256 s = amt * RAY / acc;
+        total += s;
+        shares[usr] += s;
+        return s;
+    }
+
+    function exit(address usr, uint256 amt) external auth returns (uint256) {
+        require(last == block.timestamp, "not synced");
+        uint256 s = amt * RAY / acc;
+        total -= s;
+        shares[usr] -= s;
+        // burn all -> amt = shares[usr] * acc / RAY
+        return s;
     }
 }
