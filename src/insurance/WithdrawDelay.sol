@@ -3,8 +3,8 @@ pragma solidity 0.8.32;
 
 import {IERC20} from "../lib/IERC20.sol";
 import {SafeTransfer} from "../lib/SafeTransfer.sol";
+import {Auth} from "../lib/Auth.sol";
 import {IStake} from "./lib/IStake.sol";
-import {Auth} from "./lib/Auth.sol";
 
 contract WithdrawDelay is Auth {
     using SafeTransfer for IERC20;

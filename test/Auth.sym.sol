@@ -3,7 +3,7 @@ pragma solidity 0.8.32;
 
 import {SymTest} from "halmos-cheatcodes/SymTest.sol";
 import {Test} from "forge-std/Test.sol";
-import {Auth} from "@src/insurance/lib/Auth.sol";
+import {Auth} from "@src/lib/Auth.sol";
 
 // TODO: sim test
 contract AuthSymTest is SymTest, Test {

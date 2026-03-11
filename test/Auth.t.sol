@@ -2,7 +2,7 @@
 pragma solidity 0.8.32;
 
 import {Test} from "forge-std/Test.sol";
-import {Auth} from "@src/insurance/lib/Auth.sol";
+import {Auth} from "@src/lib/Auth.sol";
 
 contract AuthTest is Test {
     Auth auth;

@@ -4,7 +4,7 @@ pragma solidity 0.8.32;
 import {IERC20} from "../lib/IERC20.sol";
 import {SafeTransfer} from "../lib/SafeTransfer.sol";
 import {Math} from "../lib/Math.sol";
-import {Auth} from "./lib/Auth.sol";
+import {Auth} from "../lib/Auth.sol";
 
 contract Stake is Auth {
     using SafeTransfer for IERC20;
