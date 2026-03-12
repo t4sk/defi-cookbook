@@ -39,13 +39,13 @@ contract Rebase is Auth {
         return acc * Math.rpow(rate, block.timestamp - last) / RAY;
     }
 
-    function sync() public {
+    function sync() public returns (uint256 amt) {
         if (block.timestamp > last) {
             uint256 a0 = acc;
             uint256 a1 = calc();
             acc = a1;
             last = block.timestamp;
-            uint256 amt = (a1 - a0) * total / RAY;
+            amt = (a1 - a0) * total / RAY;
             if (amt > 0) {
                 token.mint(address(this), amt);
             }
