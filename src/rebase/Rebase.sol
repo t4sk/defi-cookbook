@@ -39,13 +39,18 @@ contract Rebase is Auth {
         return acc * Math.rpow(rate, block.timestamp - last) / RAY;
     }
 
+    function sum() public view returns (uint256) {
+        return calc() * total / RAY;
+    }
+
     function sync() public returns (uint256 amt) {
         if (block.timestamp > last) {
             uint256 a0 = acc;
             uint256 a1 = calc();
             acc = a1;
             last = block.timestamp;
-            amt = (a1 - a0) * total / RAY;
+            // Round up + (RAY - 1) / RAY
+            amt = ((a1 - a0) * total + RAY - 1) / RAY;
             if (amt > 0) {
                 token.mint(address(this), amt);
             }
@@ -79,5 +84,14 @@ contract Rebase is Auth {
     function transfer(address dst, uint256 s) external {
         shares[msg.sender] -= s;
         shares[dst] += s;
+    }
+
+    function sweep() external auth returns (uint256) {
+        sync();
+        uint256 s = sum();
+        uint256 bal = token.balanceOf(address(this));
+        if (bal > s) {
+            token.safeTransfer(msg.sender, bal - s);
+        }
     }
 }

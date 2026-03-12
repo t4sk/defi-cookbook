@@ -211,9 +211,9 @@ contract Handler is Test {
         vm.stopPrank();
     }
 
-    function warp(uint256 secs) external {
-        secs = bound(secs, 0, stake.dur());
-        vm.warp(block.timestamp + secs);
+    function warp(uint256 dt) external {
+        dt = bound(dt, 0, stake.dur());
+        vm.warp(block.timestamp + dt);
     }
 }
 
