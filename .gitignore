@@ -15,3 +15,5 @@ docs/
 foundry.lock
 
 tmp
+__pycache__
+.ipynb_checkpoints
