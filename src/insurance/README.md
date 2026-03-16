@@ -40,17 +40,17 @@ Live ──────────► Stopped
          Cover             Exit
 ```
 
-| State   | Description                                      |
-|---------|--------------------------------------------------|
-| Live    | Normal operation — deposit, earn, withdraw       |
-| Stopped | Emissions halted, settlement pending             |
-| Cover   | Claim paid — staked tokens sent to insuree       |
-| Exit    | No claim — stakers withdraw principal + rewards  |
+| State   | Description                                     |
+| ------- | ----------------------------------------------- |
+| Live    | Normal operation — deposit, earn, withdraw      |
+| Stopped | Emissions halted, settlement pending            |
+| Cover   | Claim paid — staked tokens sent to insuree      |
+| Exit    | No claim — stakers withdraw principal + rewards |
 
 **Key functions:**
 
 | Function          | Caller  | Description                                          |
-|-------------------|---------|------------------------------------------------------|
+| ----------------- | ------- | ---------------------------------------------------- |
 | `inc(amt)`        | anyone  | Add tokens to the reward pool, increase rate         |
 | `roll(r)`         | insuree | Schedule next-period rate in the last half of `dur`  |
 | `deposit(amt)`    | staker  | Stake tokens                                         |
@@ -81,22 +81,22 @@ Live ──────────► Stopped
         Covered           Refilled
 ```
 
-| State    | `unlock()` behaviour                                           |
-|----------|----------------------------------------------------------------|
-| Live     | Unlockable after lock expiry (`curr + 2 * EPOCH`)              |
-| Stopped  | Unlockable if lock predates stop epoch, or nothing was dumped  |
-| Covered  | Only pre-stop locks unlockable (`lock.exp <= last`)            |
-| Refilled | All locks immediately unlockable                               |
+| State    | `unlock()` behaviour                                          |
+| -------- | ------------------------------------------------------------- |
+| Live     | Unlockable after lock expiry (`curr + 2 * EPOCH`)             |
+| Stopped  | Unlockable if lock predates stop epoch, or nothing was dumped |
+| Covered  | Only pre-stop locks unlockable (`lock.exp <= last`)           |
+| Refilled | All locks immediately unlockable                              |
 
 **Key functions:**
 
-| Function     | Caller | Description                                          |
-|--------------|--------|------------------------------------------------------|
-| `queue(amt)` | staker | Withdraw from Stake into a time-locked position      |
-| `unlock(i)`  | staker | Claim a matured lock                                 |
-| `stop()`     | auth   | Freeze queuing, snapshot dumped amount               |
-| `cover(dst)` | auth   | Forward `dumped` tokens to Stake for the insuree     |
-| `refill()`   | auth   | Clear dump, allow all stakers to unlock immediately  |
+| Function     | Caller | Description                                         |
+| ------------ | ------ | --------------------------------------------------- |
+| `queue(amt)` | staker | Withdraw from Stake into a time-locked position     |
+| `unlock(i)`  | staker | Claim a matured lock                                |
+| `stop()`     | auth   | Freeze queuing, snapshot dumped amount              |
+| `cover(dst)` | auth   | Forward `dumped` tokens to Stake for the insuree    |
+| `refill()`   | auth   | Clear dump, allow all stakers to unlock immediately |
 
 ## Lifecycle
 
@@ -152,3 +152,13 @@ invariants:
 ```
 
 The reward cap ensures `rewards_to_stakers <= total_staked / cov` over any duration, guaranteeing the insuree minimum coverage relative to rewards paid out.
+
+## Deployed contracts
+
+```
+address constant TOKEN = 0xb23C363FE3B1f757dA5d18beA2a15Fc18DC6E698;
+address constant FACTORY = 0x2FfB30a32908b3c099b083A1b34184de69D4DFd2;
+address constant STAKE = 0x42e89c198d6825573ab53932888A6a030E2B9d5E;
+address constant WITHDRAW_DELAY = 0xB787255ff8c346877831F11B8bBbD40b0828B662;
+address constant AGREEMENT = 0x702D5be3BfCbE03f5375628BDd211164800039C0;
+```
