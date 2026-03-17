@@ -38,3 +38,5 @@ forge script script/csamm.s.sol:CSAMMScript \
 --verify \
 --etherscan-api-key $ETHERSCAN_API_KEY
 ```
+
+TODO: continuous insurance
