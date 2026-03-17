@@ -162,3 +162,6 @@ address constant STAKE = 0x42e89c198d6825573ab53932888A6a030E2B9d5E;
 address constant WITHDRAW_DELAY = 0xB787255ff8c346877831F11B8bBbD40b0828B662;
 address constant AGREEMENT = 0x702D5be3BfCbE03f5375628BDd211164800039C0;
 ```
+
+TODO: continuous? - inc extends exp?
+TODO: limitations - how to refund to insuree if insuree is a vault
