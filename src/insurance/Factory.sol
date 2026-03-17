@@ -13,11 +13,16 @@ contract Factory {
     );
 
     function create(
+        // Payment token
         address token,
         address insuree,
+        // Insurance duration
         uint256 dur,
+        // Insurance dust
         uint256 dust,
+        // Insurance coverage (total staked / premium paid)
         uint256 cov,
+        // Min withdraw delay
         uint256 epoch
     ) external returns (address, address) {
         require(token != address(0), "token = 0");
