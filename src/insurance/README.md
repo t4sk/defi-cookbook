@@ -156,9 +156,13 @@ The reward cap ensures `rewards_to_stakers <= total_staked / cov` over any durat
 ## Deployed contracts
 
 ```
-address constant TOKEN = 0xb23C363FE3B1f757dA5d18beA2a15Fc18DC6E698;
-address constant FACTORY = 0x2FfB30a32908b3c099b083A1b34184de69D4DFd2;
-address constant STAKE = 0x42e89c198d6825573ab53932888A6a030E2B9d5E;
-address constant WITHDRAW_DELAY = 0xB787255ff8c346877831F11B8bBbD40b0828B662;
-address constant AGREEMENT = 0x702D5be3BfCbE03f5375628BDd211164800039C0;
+address constant TOKEN =0xb45d2DA802eD4848A1A25755802c26303f0334e2
+address constant FACTORY =0x8aa77Cb43B32f0A0ab34a1C13d20114d36200383
+address constant STAKE =
+address constant WITHDRAW_DELAY =
 ```
+
+## Improvements
+
+- Continuous (expires after last `inc` + `dur`)
+- Insuree vault
