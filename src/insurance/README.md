@@ -157,9 +157,9 @@ The reward cap ensures `rewards_to_stakers <= total_staked / cov` over any durat
 
 ```
 address constant TOKEN =0xb45d2DA802eD4848A1A25755802c26303f0334e2
-address constant FACTORY =0x8aa77Cb43B32f0A0ab34a1C13d20114d36200383
-address constant STAKE =
-address constant WITHDRAW_DELAY =
+address constant FACTORY = 0x8aa77Cb43B32f0A0ab34a1C13d20114d36200383
+address constant STAKE = 0x072090976ba290695c9871910317AC1B7d924Bb0
+address constant WITHDRAW_DELAY = 0x935CF6E1854539D81ac4350eA8EBe3B7ED65d1CB
 ```
 
 ## Improvements
