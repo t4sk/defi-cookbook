@@ -20,23 +20,24 @@ forge install a16z/halmos-cheatcodes
 PK=...
 ACCOUNT=dev
 cast wallet import --private-key $PK $ACCOUNT
+cast wallet list
+cast wallet address --account $ACCOUNT
 ```
 
 ### Forge script
 
 ```shell
-FORK_URL=...
-ETHERSCAN_API_KEY=...
-SENDER=...
+FORK_URL=
+ETHERSCAN_API_KEY=
+SENDER=
+ACCOUNT=
 
 forge script script/csamm.s.sol:CSAMMScript \
 --rpc-url $FORK_URL \
 -vvv \
---keystore ~/.foundry/keystores/my_keystore.json \
+--account $ACCOUNT \
 --sender $SENDER \
 --broadcast \
 --verify \
 --etherscan-api-key $ETHERSCAN_API_KEY
 ```
-
-TODO: continuous insurance
