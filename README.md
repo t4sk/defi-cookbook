@@ -1,6 +1,6 @@
 # DeFi cookbook
 
-- [CSAMM](https://sepolia.etherscan.io/address/0x3911aaa51e43abddf0f25f8ebe7e12dab8945764)
+- [Insurance](./src/insurance)
 - CPAMM
 - CLAMM
 - Stable coin
