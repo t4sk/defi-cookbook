@@ -21,6 +21,12 @@ contract Rebase is Auth {
     uint256 public total;
     // User => shares
     mapping(address => uint256) public shares;
+    bool public stopped;
+
+    modifier live() {
+        require(!stopped, "stopped");
+        _;
+    }
 
     constructor(address _token) {
         token = IMint(_token);
@@ -29,7 +35,7 @@ contract Rebase is Auth {
         last = block.timestamp;
     }
 
-    function set(uint256 r) external auth {
+    function set(uint256 r) external auth live {
         require(r >= RAY, "r < 1");
         sync();
         rate = r;
@@ -39,19 +45,19 @@ contract Rebase is Auth {
         return acc * Math.rpow(rate, block.timestamp - last) / RAY;
     }
 
-    function sum() public view returns (uint256) {
+    function sum() external view returns (uint256) {
         return calc() * total / RAY;
     }
 
-    function sync() public returns (uint256 amt) {
+    function sync() public live returns (uint256 amt) {
         if (block.timestamp > last) {
-            uint256 a0 = acc;
-            uint256 a1 = calc();
-            acc = a1;
+            uint256 a = calc();
+            acc = a;
             last = block.timestamp;
-            // Round up + (RAY - 1) / RAY
-            amt = ((a1 - a0) * total + RAY - 1) / RAY;
-            if (amt > 0) {
+            uint256 s = a * total / RAY;
+            uint256 bal = token.balanceOf(address(this));
+            if (s > bal) {
+                amt = s - bal;
                 token.mint(address(this), amt);
             }
         }
@@ -61,7 +67,7 @@ contract Rebase is Auth {
         return shares[usr] * calc() / RAY;
     }
 
-    function join(uint256 amt) external returns (uint256) {
+    function join(uint256 amt) external live returns (uint256) {
         sync();
         token.transferFrom(msg.sender, address(this), amt);
         uint256 s = amt * RAY / acc;
@@ -71,7 +77,7 @@ contract Rebase is Auth {
         return s;
     }
 
-    function exit(uint256 s) external returns (uint256) {
+    function exit(uint256 s) external live returns (uint256) {
         sync();
         total -= s;
         shares[msg.sender] -= s;
@@ -81,17 +87,15 @@ contract Rebase is Auth {
         return amt;
     }
 
-    function transfer(address dst, uint256 s) external {
+    function transfer(address dst, uint256 s) external live {
         shares[msg.sender] -= s;
         shares[dst] += s;
     }
 
-    function sweep() external auth returns (uint256) {
-        sync();
-        uint256 s = sum();
+    // In case rates blow up and revert call to sync()
+    function yoink() external auth live {
+        stopped = true;
         uint256 bal = token.balanceOf(address(this));
-        if (bal > s) {
-            token.safeTransfer(msg.sender, bal - s);
-        }
+        token.safeTransfer(msg.sender, bal);
     }
 }

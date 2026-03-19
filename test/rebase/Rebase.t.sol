@@ -51,11 +51,6 @@ contract Handler is Test {
         rebase.set(r);
     }
 
-    function sweep() external {
-        vm.prank(AUTH);
-        rebase.sweep();
-    }
-
     function sync() external {
         rebase.sync();
     }
