@@ -1,7 +1,7 @@
 # DeFi cookbook
 
 - [Insurance](./src/insurance)
-- [Compound rebase token](./src/rebase)
+- [Compound interest rebase token](./src/rebase)
 - CPAMM
 - CLAMM
 - Stable coin

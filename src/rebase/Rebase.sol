@@ -10,6 +10,7 @@ interface IMint is IERC20 {
     function mint(address dst, uint256 amt) external;
 }
 
+// Compound interest accruing rebase token
 contract Rebase is Auth {
     using SafeTransfer for IMint;
 
